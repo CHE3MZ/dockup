@@ -117,22 +117,31 @@ jobs:
 
       - name: Foreground run serves, external shutdown tears down
         run: |
-          $job = Start-Job { Set-Location $using:PWD; & .\dockup.exe -d Debian }
+          $proc = Start-Process -FilePath "$PWD\dockup.exe" -ArgumentList @('-d','Debian') -NoNewWindow -PassThru -RedirectStandardOutput 'fg.out.log' -RedirectStandardError 'fg.err.log'
           $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
           $ok = $false
           for ($i = 1; $i -le 30; $i++) {
             docker version >$null 2>$null
             if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            if ($proc.HasExited) { break }
             Start-Sleep -Seconds 5
           }
-          if (-not $ok) { throw 'foreground relay never came up' }
+          Write-Host '--- foreground stdout ---'
+          Get-Content 'fg.out.log' -ErrorAction SilentlyContinue
+          Write-Host '--- foreground stderr ---'
+          Get-Content 'fg.err.log' -ErrorAction SilentlyContinue
+          if (-not $ok) {
+            .\dockup.exe shutdown 2>$null
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            throw 'foreground relay never came up'
+          }
           $hw = docker run --rm hello-world
+          if ($LASTEXITCODE -ne 0) { throw 'docker run through foreground relay failed' }
           if ($hw -notmatch 'Hello from Docker!') { throw 'foreground relay failed hello-world' }
           .\dockup.exe shutdown
           if ($LASTEXITCODE -ne 0) { throw 'shutdown of foreground run failed' }
           $ps = .\dockup.exe ps
           if ($ps -notmatch 'stopped') { throw "expected stopped ps, got: $ps" }
-          Remove-Job $job -Force -ErrorAction SilentlyContinue
 
       - name: dockup daemon start
         run: |
@@ -203,4 +212,6 @@ jobs:
           path: |
             ${{ env.APPDATA }}\dockup\state.json
             ${{ env.APPDATA }}\dockup\logs\*.log
+            fg.out.log
+            fg.err.log
           if-no-files-found: warn
