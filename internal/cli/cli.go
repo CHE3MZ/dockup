@@ -536,6 +536,14 @@ func cmdCleanup() int {
 		return 1
 	}
 	fmt.Printf("cleanup: %d fixed, %d need attention\n", fixed, attention)
+	// A live pipe with no active owner is foreign (e.g. Docker Desktop) or a
+	// stale relay whose owner died. Never kill unknown PIDs — report it.
+	if relay.Alive() {
+		if s2, err := state.Load(); err == nil && s2.ActiveDistro == "" {
+			fmt.Println("cleanup: NEEDS ATTENTION (unknown process holds the relay pipe; stop Docker Desktop or stale relays, then re-run)")
+			attention++
+		}
+	}
 	if attention > 0 {
 		return 1
 	}
@@ -673,9 +681,16 @@ func bareRun(distroFlag string, portFlag int) int {
 		return 1
 	}
 	if relay.Alive() {
-		fmt.Printf("relay already up for %q (attaching, not double-starting)\n", name)
-		fmt.Println(`point your shell at it: dockup env --shell powershell | Invoke-Expression`)
-		return 0
+		if s.ActiveDistro == name {
+			fmt.Printf("relay already up for %q (attaching, not double-starting)\n", name)
+			fmt.Println(`point your shell at it: dockup env --shell powershell | Invoke-Expression`)
+			return 0
+		}
+		// Pipe alive but not ours (e.g. Docker Desktop, or a foreign daemon).
+		// Never hijack it: attaching would claim success while managing nothing.
+		fmt.Fprintln(os.Stderr, `dockup: something else is listening on \\.\pipe\docker_engine (e.g. Docker Desktop).`)
+		fmt.Fprintln(os.Stderr, "dockup: stop it first, or run `dockup cleanup` if it is a stale dockup relay.")
+		return 1
 	}
 
 	port, err := resolvePort(portFlag)
@@ -806,8 +821,13 @@ func daemonStart(name string, portFlag int) int {
 		return 1
 	}
 	if relay.Alive() {
-		fmt.Printf("relay already up for %q (not double-starting)\n", name)
-		return 0
+		if s.ActiveDistro == name {
+			fmt.Printf("relay already up for %q (not double-starting)\n", name)
+			return 0
+		}
+		fmt.Fprintln(os.Stderr, `dockup: something else is listening on \\.\pipe\docker_engine (e.g. Docker Desktop).`)
+		fmt.Fprintln(os.Stderr, "dockup: stop it first, or run `dockup cleanup` if it is a stale dockup relay.")
+		return 1
 	}
 	port, err := resolvePort(portFlag)
 	if err != nil {

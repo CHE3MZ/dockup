@@ -72,12 +72,23 @@ jobs:
           docker --version
           docker compose version
 
+      # The image may ship its own daemon on the DEFAULT pipe name, which
+      # would silently answer our relay tests (false pass). Stop/disable it
+      # and gate: no daemon may answer without dockup running.
+      - name: Decontaminate default pipe
+        run: |
+          Get-Service | Where-Object { $_.Name -like '*docker*' } | Stop-Service -Force -ErrorAction SilentlyContinue
+          Get-Service | Where-Object { $_.Name -like '*docker*' } | Set-Service -StartupType Disabled -ErrorAction SilentlyContinue
+          if (docker version 2>$null) { throw 'contaminated runner: a Docker daemon answers without dockup' }
+          Write-Host 'pipe clean: no default daemon answering'
+
       - name: dockup doctor (pre-setup)
         run: .\dockup.exe doctor
 
       - name: dockup setup Debian
         run: |
           .\dockup.exe setup Debian
+          if ($LASTEXITCODE -ne 0) { throw 'setup failed' }
           .\dockup.exe list
 
       - name: dockup doctor (post-setup)
@@ -86,16 +97,23 @@ jobs:
       - name: dockup daemon start
         run: |
           .\dockup.exe daemon start -d Debian
+          if ($LASTEXITCODE -ne 0) { throw 'daemon start failed' }
           Start-Sleep -Seconds 10
-          .\dockup.exe daemon status -d Debian
-          .\dockup.exe ps
+          $st = .\dockup.exe daemon status -d Debian
+          if ($LASTEXITCODE -ne 0) { throw 'daemon status failed' }
+          if ($st -notmatch 'running') { throw "expected running daemon, got: $st" }
+          $ps = .\dockup.exe ps
+          if ($ps -notmatch 'running') { throw "expected running ps, got: $ps" }
 
       - name: docker run hello-world through dockup relay
         run: |
           $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
           .\dockup.exe env --shell powershell
+          if ($LASTEXITCODE -ne 0) { throw 'dockup env failed: no relay up' }
           docker version
-          docker run --rm hello-world
+          $hw = docker run --rm hello-world
+          if ($LASTEXITCODE -ne 0) { throw 'docker run failed' }
+          if ($hw -notmatch 'Hello from Docker!') { throw 'hello-world did not run through our relay' }
 
       - name: docker compose plugin check
         run: |
@@ -104,13 +122,17 @@ jobs:
 
       - name: Double-start guard (must attach/report, not duplicate)
         run: |
-          .\dockup.exe daemon status -d Debian
+          $st = .\dockup.exe daemon status -d Debian
+          if ($st -notmatch 'running') { throw "daemon lost between steps, got: $st" }
 
       - name: dockup shutdown (must leave distro running-state safe + ps stopped)
         run: |
           .\dockup.exe shutdown
-          .\dockup.exe ps
+          if ($LASTEXITCODE -ne 0) { throw 'shutdown failed' }
+          $ps = .\dockup.exe ps
+          if ($ps -notmatch 'stopped') { throw "expected stopped ps, got: $ps" }
           .\dockup.exe cleanup
+          if ($LASTEXITCODE -ne 0) { throw 'cleanup reported needs-attention' }
           .\dockup.exe doctor
 
       - name: Upload dockup state + logs
