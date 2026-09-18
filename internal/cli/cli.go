@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"strings"
 
-	"dockup/internal/dockercli"
-	"dockup/internal/doctor"
-	"dockup/internal/engine"
-	"dockup/internal/picker"
-	"dockup/internal/state"
-	"dockup/internal/wsl"
+	"github.com/CHE3MZ/dockup/internal/dockercli"
+	"github.com/CHE3MZ/dockup/internal/doctor"
+	"github.com/CHE3MZ/dockup/internal/engine"
+	"github.com/CHE3MZ/dockup/internal/picker"
+	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
 // Run dispatches. Returns process exit code.

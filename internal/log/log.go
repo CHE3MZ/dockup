@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/state"
 )
 
 const maxBytes = 5 * 1024 * 1024

@@ -4,7 +4,7 @@ package alpine
 import (
 	"time"
 
-	"dockup/internal/wsl"
+	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
 // Setup installs docker, containerd, socat. No rc-update (no autostart).

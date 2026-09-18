@@ -1,14 +1,36 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - run: go vet ./...
-      - run: go test ./...
-      - run: $env:GOOS='windows'; $env:GOARCH='amd64'; go build -o dockup.exe ./cmd/dockup
+          cache: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit tests (no WSL needed)
+        run: go test ./...
+
+      - name: Build (windows/amd64 only)
         shell: pwsh
+        run: |
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'amd64'
+          go build -o dockup.exe ./cmd/dockup
+          .\dockup.exe version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dockup-exe
+          path: dockup.exe
+          if-no-files-found: error

@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"dockup/internal/cli"
+	"github.com/CHE3MZ/dockup/internal/cli"
 )
 
 var (

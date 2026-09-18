@@ -3,7 +3,7 @@ package unit
 import (
 	"testing"
 
-	"dockup/internal/wsl"
+	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
 func TestParseListOutputUTF16(t *testing.T) {

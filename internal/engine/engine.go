@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"dockup/internal/wsl"
+	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
 // PickFreePort returns a free 127.0.0.1 TCP port for the relay.
@@ -58,4 +58,52 @@ func Healthy(port int) bool {
 	}
 	c.Close()
 	return true
+}
+
+// WaitRelay polls Healthy until timeout. Ensures socat is reachable from Windows.
+func WaitRelay(port int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if Healthy(port) {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("relay 127.0.0.1:%d not reachable", port)
+}
+
+// SocketAlive checks /var/run/docker.sock exists and `docker version` answers
+// inside the distro (proves dockerd is up, not just socat listening).
+func SocketAlive(distro string) bool {
+	out, err := wsl.Exec(distro, 15*time.Second, "sh", "-c",
+		"test -S /var/run/docker.sock && docker version --format '{{.Server.Version}}'")
+	if err != nil {
+		return false
+	}
+	return len(trimSpace(out)) > 0
+}
+
+// WaitSocket polls SocketAlive until timeout.
+func WaitSocket(distro string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if SocketAlive(distro) {
+			return nil
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return fmt.Errorf("dockerd socket in %q not ready", distro)
+}
+
+func trimSpace(b []byte) []byte {
+	s := string(b)
+	i := 0
+	for i < len(s) && (s[i] == ' ' || s[i] == '\n' || s[i] == '\r' || s[i] == '\t' || s[i] == 0) {
+		i++
+	}
+	j := len(s)
+	for j > i && (s[j-1] == ' ' || s[j-1] == '\n' || s[j-1] == '\r' || s[j-1] == '\t' || s[j-1] == 0) {
+		j--
+	}
+	return []byte(s[i:j])
 }

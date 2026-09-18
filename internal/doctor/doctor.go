@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"runtime"
 
-	"dockup/internal/dockercli"
-	"dockup/internal/state"
-	"dockup/internal/wsl"
+	"github.com/CHE3MZ/dockup/internal/dockercli"
+	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
 // Run prints checks, returns non-zero-worthy error if critical fails.
