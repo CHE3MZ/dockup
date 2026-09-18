@@ -1,0 +1,6 @@
+#Requires -Version 7.0
+$ErrorActionPreference = 'Stop'
+$env:GOOS = 'windows'
+$env:GOARCH = 'amd64'
+go vet ./...
+go test ./...
