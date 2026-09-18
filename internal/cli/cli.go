@@ -2,15 +2,24 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
+	"github.com/CHE3MZ/dockup/internal/distro/alpine"
+	"github.com/CHE3MZ/dockup/internal/distro/debian"
+
+	"github.com/CHE3MZ/dockup/internal/distro"
 	"github.com/CHE3MZ/dockup/internal/dockercli"
 	"github.com/CHE3MZ/dockup/internal/doctor"
 	"github.com/CHE3MZ/dockup/internal/engine"
 	"github.com/CHE3MZ/dockup/internal/picker"
+	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
@@ -133,6 +142,29 @@ func resolveDistro(flag string) (string, *state.State, error) {
 	return s.Default, s, nil
 }
 
+// teardownDistro stops dockup-managed processes and, ONLY if dockup booted
+// the distro, terminates it. Clears active/port/daemon bookkeeping.
+// Best-effort: never fails, so teardown always converges.
+func teardownDistro(s *state.State, name string) {
+	d, ok := s.Distros[name]
+	if !ok {
+		s.ActiveDistro = ""
+		return
+	}
+	_ = engine.Stop(name)
+	if d.BootedByDockup {
+		_ = wsl.Terminate(name)
+	}
+	d.RelayPort = 0
+	d.WSLWasRunning = false
+	d.BootedByDockup = false
+	d.Daemon = state.DaemonInfo{}
+	s.Distros[name] = d
+	if s.ActiveDistro == name {
+		s.ActiveDistro = ""
+	}
+}
+
 func cmdList() int {
 	s, err := state.Load()
 	if err != nil {
@@ -143,16 +175,19 @@ func cmdList() int {
 		fmt.Println("(no configured distros — run: dockup setup)")
 		return 0
 	}
-	fmt.Printf("%-24s %-8s %-8s\n", "NAME", "DEFAULT", "ACTIVE")
-	for name := range s.Distros {
-		def, act := "", ""
+	fmt.Printf("%-24s %-8s %-8s %-6s\n", "NAME", "DEFAULT", "ACTIVE", "PORT")
+	for name, d := range s.Distros {
+		def, act, port := "", "", ""
 		if name == s.Default {
 			def = "*"
 		}
 		if name == s.ActiveDistro {
-			act = "up?"
+			act = "yes"
+			if d.RelayPort != 0 {
+				port = strconv.Itoa(d.RelayPort)
+			}
 		}
-		fmt.Printf("%-24s %-8s %-8s\n", name, def, act)
+		fmt.Printf("%-24s %-8s %-8s %-6s\n", name, def, act, port)
 	}
 	return 0
 }
@@ -180,12 +215,13 @@ func cmdDefault(args []string) int {
 		args = []string{name}
 	}
 	name := args[0]
-	if _, ok := s.Distros[name]; !ok {
-		fmt.Fprintf(os.Stderr, "dockup: distro %q is not configured\n", name)
-		return 1
-	}
-	s.Default = name
-	if err := state.Save(s); err != nil {
+	if err := state.Transaction(func(s *state.State) error {
+		if _, ok := s.Distros[name]; !ok {
+			return fmt.Errorf("distro %q is not configured", name)
+		}
+		s.Default = name
+		return nil
+	}); err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		return 1
 	}
@@ -204,6 +240,10 @@ func cmdEnv(args []string) int {
 	}
 	if s.ActiveDistro == "" {
 		fmt.Fprintln(os.Stderr, "dockup: no relay up (start dockup first)")
+		return 1
+	}
+	if !relay.Alive() {
+		fmt.Fprintln(os.Stderr, "dockup: relay pipe is down (run dockup cleanup, then start again)")
 		return 1
 	}
 	shell := "powershell"
@@ -234,11 +274,21 @@ func cmdPs() int {
 		fmt.Println("stopped (no active distro)")
 		return 0
 	}
-	d := s.Distros[s.ActiveDistro]
-	alive := engine.Healthy(d.RelayPort)
-	status := "stopped"
-	if alive {
+	d, ok := s.Distros[s.ActiveDistro]
+	if !ok || d.RelayPort == 0 {
+		fmt.Printf("%-24s %s\n", s.ActiveDistro, "stopped (stale state, run dockup cleanup)")
+		return 0
+	}
+	relayUp := engine.Healthy(d.RelayPort)
+	sockUp := engine.SocketAlive(s.ActiveDistro)
+	var status string
+	switch {
+	case relayUp && sockUp:
 		status = fmt.Sprintf("running (port %d, pid %d, since %s)", d.RelayPort, d.Daemon.PID, d.Daemon.StartedAt)
+	case relayUp:
+		status = fmt.Sprintf("degraded (relay up on %d, engine not responding)", d.RelayPort)
+	default:
+		status = "stopped (relay down, run dockup cleanup)"
 	}
 	fmt.Printf("%-24s %s\n", s.ActiveDistro, status)
 	return 0
@@ -272,7 +322,64 @@ func cmdSetup(args []string) int {
 			return 1
 		}
 	}
-	fmt.Printf("setup %q: not yet implemented in this scaffold (P1 builds it next)\n", name)
+
+	all, err := wsl.List()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	found := false
+	for _, d := range all {
+		if d == name {
+			found = true
+			break
+		}
+	}
+	if !found {
+		fmt.Fprintf(os.Stderr, "dockup: distro %q not found (wsl --list)\n", name)
+		return 1
+	}
+	if s, _ := state.Load(); s != nil {
+		if _, ok := s.Distros[name]; ok {
+			fmt.Fprintf(os.Stderr, "dockup: %q is already configured\n", name)
+			return 1
+		}
+	}
+
+	fam := distro.Detect(name)
+	var snap state.InstalledByDockup
+	var hadPrior bool
+	switch fam {
+	case distro.Debian:
+		snap, hadPrior, err = debian.Setup(name)
+	case distro.Alpine:
+		snap, hadPrior, err = alpine.Setup(name)
+	default:
+		fmt.Fprintf(os.Stderr, "dockup: unsupported distro %q (need Debian/Ubuntu or Alpine)\n", name)
+		return 1
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+
+	if err := state.Transaction(func(s *state.State) error {
+		s.Distros[name] = state.DistroState{
+			InstalledByDockup: snap,
+			HadPriorDocker:    hadPrior,
+		}
+		if s.Default == "" {
+			s.Default = name
+		}
+		return nil
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	fmt.Printf("setup %q done (family %s)\n", name, fam)
+	if hadPrior {
+		fmt.Fprintf(os.Stderr, "dockup: note: %q already had docker — revert will only remove what setup added\n", name)
+	}
 	return 0
 }
 
@@ -338,7 +445,17 @@ func bareRun(distroFlag string, portFlag int) int {
 	if !requireCLI(false) {
 		return 1
 	}
-	name, s, err := resolveDistro(distroFlag)
+	name, _, err := resolveDistro(distroFlag)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+
+	// Catch Ctrl-C from here on so teardown always runs.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	s, err := state.Load()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		return 1
@@ -347,6 +464,92 @@ func bareRun(distroFlag string, portFlag int) int {
 		fmt.Fprintf(os.Stderr, "dockup: %q is active — stop/shutdown first (single-active)\n", s.ActiveDistro)
 		return 1
 	}
-	fmt.Printf("foreground run %q (port %d): relay not yet implemented in this scaffold (P1 next)\n", name, portFlag)
+	if relay.Alive() {
+		fmt.Printf("relay already up for %q (attaching, not double-starting)\n", name)
+		fmt.Println(`point your shell at it: dockup env --shell powershell | Invoke-Expression`)
+		return 0
+	}
+
+	port := portFlag
+	if port == 0 {
+		port, err = engine.PickFreePort()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "dockup:", err)
+			return 1
+		}
+	} else if port < 1 || port > 65535 {
+		fmt.Fprintln(os.Stderr, "dockup: bad --port (1-65535)")
+		return 1
+	}
+
+	running, err := wsl.Running()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	wasRunning := running[name]
+	bootedByDockup := !wasRunning
+
+	fmt.Printf("starting engine in %q (relay 127.0.0.1:%d)...\n", name, port)
+	if err := engine.Start(name, port); err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	if err := engine.WaitSocket(name, 2*time.Minute); err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		_ = engine.Stop(name)
+		if bootedByDockup {
+			_ = wsl.Terminate(name)
+		}
+		return 1
+	}
+	if err := engine.WaitRelay(port, 30*time.Second); err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		_ = engine.Stop(name)
+		if bootedByDockup {
+			_ = wsl.Terminate(name)
+		}
+		return 1
+	}
+
+	startedAt := time.Now().UTC().Format(time.RFC3339)
+	selfPID := os.Getpid()
+	if err := state.Transaction(func(s *state.State) error {
+		if s.ActiveDistro != "" && s.ActiveDistro != name {
+			return fmt.Errorf("%q became active while starting — aborting", s.ActiveDistro)
+		}
+		d := s.Distros[name]
+		d.RelayPort = port
+		d.WSLWasRunning = wasRunning
+		d.BootedByDockup = bootedByDockup
+		d.Daemon = state.DaemonInfo{PID: selfPID, StartedAt: startedAt, Mode: "foreground"}
+		s.Distros[name] = d
+		s.ActiveDistro = name
+		return nil
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		_ = engine.Stop(name)
+		if bootedByDockup {
+			_ = wsl.Terminate(name)
+		}
+		return 1
+	}
+
+	fmt.Printf("up: %q on npipe:////./pipe/docker_engine (Ctrl-C to tear down)\n", name)
+	fmt.Println(`  $env:DOCKER_HOST='npipe:////./pipe/docker_engine'`)
+	_ = relay.Serve(ctx, port) // returns on Ctrl-C
+
+	if err := state.Transaction(func(s *state.State) error {
+		teardownDistro(s, name)
+		return nil
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	if bootedByDockup {
+		fmt.Printf("down: processes stopped, distro %q terminated (it was booted by dockup)\n", name)
+	} else {
+		fmt.Printf("down: dockup processes stopped, distro %q left running (it was already running)\n", name)
+	}
 	return 0
 }

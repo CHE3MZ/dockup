@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // InstalledByDockup snapshots what setup added so revert removes only the delta.
@@ -84,8 +85,8 @@ func Load() (*State, error) {
 	return s, nil
 }
 
-// Save writes state atomically (tmp + rename). TODO: real file locking for
-// concurrent double-start from two terminals (lockfile + retry).
+// Save writes state atomically (tmp + rename). For read-modify-write across
+// processes (double-start from two terminals) use Transaction.
 func Save(s *State) error {
 	p, err := Path()
 	if err != nil {
@@ -103,4 +104,60 @@ func Save(s *State) error {
 		return err
 	}
 	return os.Rename(tmp, p)
+}
+
+// lockPath returns the lockfile path next to state.json.
+func lockPath() (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "state.lock"), nil
+}
+
+// acquire creates the lockfile exclusively, retrying until timeout.
+// A lock older than 30s is treated as stale (crashed owner) and removed.
+func acquire(timeout time.Duration) (release func(), err error) {
+	lp, err := lockPath()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(lp), 0o755); err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		f, err := os.OpenFile(lp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err == nil {
+			fmt.Fprintf(f, "%d", os.Getpid())
+			f.Close()
+			return func() { _ = os.Remove(lp) }, nil
+		}
+		if st, statErr := os.Stat(lp); statErr == nil && time.Since(st.ModTime()) > 30*time.Second {
+			_ = os.Remove(lp)
+			continue
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("state is locked by another dockup (try again)")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// Transaction holds the lock across load → mutate → save, so two terminals
+// racing to start cannot corrupt state or double-claim activeDistro.
+func Transaction(fn func(*State) error) error {
+	release, err := acquire(10 * time.Second)
+	if err != nil {
+		return err
+	}
+	defer release()
+	s, err := Load()
+	if err != nil {
+		return err
+	}
+	if err := fn(s); err != nil {
+		return err
+	}
+	return Save(s)
 }
