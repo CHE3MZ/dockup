@@ -108,3 +108,8 @@ func trimSpace(b []byte) []byte {
 	}
 	return []byte(s[i:j])
 }
+
+// TrimOutput trims whitespace/NULs from command output for display.
+func TrimOutput(b []byte) string {
+	return string(trimSpace(b))
+}

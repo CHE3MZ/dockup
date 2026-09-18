@@ -82,12 +82,16 @@ apk add --no-cache docker containerd socat docker-cli-compose
 	return snap, hadPrior, nil
 }
 
-// Remove deletes only packages dockup installed. Volumes/images are untouched.
-func Remove(distro string, packages []string) error {
-	if len(packages) == 0 {
-		return nil
+// Remove deletes ONLY what setup added (snapshot). Volumes/images untouched.
+func Remove(distro string, snap state.InstalledByDockup) error {
+	if len(snap.Packages) > 0 {
+		script := "apk del " + strings.Join(snap.Packages, " ")
+		if _, err := wsl.RunRetry(distro, "package removal", 10*time.Minute, 2, script); err != nil {
+			return err
+		}
 	}
-	script := "apk del " + strings.Join(packages, " ")
-	_, err := wsl.Exec(distro, 10*time.Minute, "sh", "-c", script)
-	return err
+	if len(snap.Files) > 0 {
+		_, _ = wsl.ExecScript(distro, 15*time.Second, "rm -f "+strings.Join(snap.Files, " "))
+	}
+	return nil
 }

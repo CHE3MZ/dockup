@@ -417,12 +417,128 @@ func cmdRevert(args []string) int {
 		fmt.Println("aborted")
 		return 0
 	}
-	fmt.Printf("revert %q: not yet implemented in this scaffold (P3)\n", name)
+	s, err := state.Load()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	d, ok := s.Distros[name]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "dockup: distro %q is not configured\n", name)
+		return 1
+	}
+	// Stop anything running first (lifecycle rule: terminate only if booted).
+	if s.ActiveDistro == name {
+		stopOwnerPID(d.Daemon.PID)
+		_ = engine.Stop(name)
+	}
+	// Remove only the setup delta. Unknown family (e.g. distro replaced):
+	// skip package removal, still drop the state entry.
+	switch distro.Detect(name) {
+	case distro.Debian:
+		if err := debian.Remove(name, d.InstalledByDockup); err != nil {
+			fmt.Fprintln(os.Stderr, "dockup:", err)
+			return 1
+		}
+	case distro.Alpine:
+		if err := alpine.Remove(name, d.InstalledByDockup); err != nil {
+			fmt.Fprintln(os.Stderr, "dockup:", err)
+			return 1
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "dockup: warning: %q family unknown, skipping package removal\n", name)
+	}
+	npkg := len(d.InstalledByDockup.Packages)
+	nrepo := len(d.InstalledByDockup.Repos)
+	hadPrior := d.HadPriorDocker
+	if err := state.Transaction(func(s *state.State) error {
+		teardownDistro(s, name)
+		delete(s.Distros, name)
+		if s.Default == name {
+			s.Default = ""
+			for other := range s.Distros {
+				s.Default = other
+				break
+			}
+		}
+		return nil
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	fmt.Printf("reverted %q (removed %d packages, %d repo files; images/volumes/distro untouched)\n", name, npkg, nrepo)
+	if hadPrior {
+		fmt.Fprintf(os.Stderr, "dockup: note: %q had docker before setup — pre-existing install left alone\n", name)
+	}
 	return 0
 }
 
 func cmdCleanup() int {
-	fmt.Println("cleanup: not yet implemented in this scaffold (P3)")
+	fixed, attention := 0, 0
+	if err := state.Transaction(func(s *state.State) error {
+		running, err := wsl.List()
+		if err != nil {
+			return err
+		}
+		exists := map[string]bool{}
+		for _, d := range running {
+			exists[d] = true
+		}
+		// Prune configs for distros that no longer exist (config only).
+		for name := range s.Distros {
+			if !exists[name] {
+				fmt.Printf("cleanup: %q no longer installed, dropping config\n", name)
+				teardownDistro(s, name)
+				delete(s.Distros, name)
+				if s.Default == name {
+					s.Default = ""
+				}
+				fixed++
+			}
+		}
+		if s.ActiveDistro == "" && s.Default != "" {
+			if _, ok := s.Distros[s.Default]; !ok {
+				s.Default = ""
+			}
+		}
+		for name, d := range s.Distros {
+			if name == s.ActiveDistro {
+				relayUp := d.RelayPort != 0 && engine.Healthy(d.RelayPort)
+				sockUp := relayUp && engine.SocketAlive(name)
+				switch {
+				case d.RelayPort != 0 && relayUp && sockUp:
+					fmt.Printf("cleanup: %q healthy, nothing to do\n", name)
+				case relayUp:
+					fmt.Printf("cleanup: %q NEEDS ATTENTION (relay up, engine not responding)\n", name)
+					attention++
+				default:
+					fmt.Printf("cleanup: %q had stale active entry, cleared\n", name)
+					teardownDistro(s, name)
+					fixed++
+				}
+				continue
+			}
+			// Not active: engine must be down. Signature-scoped stop only.
+			if engine.SocketAlive(name) {
+				fmt.Printf("cleanup: %q has orphan engine, stopping (signature match only)\n", name)
+				_ = engine.Stop(name)
+				if engine.SocketAlive(name) {
+					fmt.Printf("cleanup: %q NEEDS ATTENTION (engine still responding after stop)\n", name)
+					attention++
+				} else {
+					fixed++
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	fmt.Printf("cleanup: %d fixed, %d need attention\n", fixed, attention)
+	if attention > 0 {
+		return 1
+	}
 	return 0
 }
 
@@ -715,6 +831,10 @@ func daemonStart(name string, portFlag int) int {
 	}
 	logPath, err := log.PathFor(name)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, "dockup:", err)
+		return 1
+	}
+	if err := log.RotateIfNeeded(name); err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		return 1
 	}

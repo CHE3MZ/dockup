@@ -12,6 +12,7 @@ import (
 )
 
 var dockupPackages = []string{"docker-ce", "docker-ce-cli", "containerd.io", "socat", "iptables"}
+
 const repoFile = "/etc/apt/sources.list.d/docker.list"
 const keyFile = "/etc/apt/keyrings/docker.asc"
 
@@ -144,16 +145,21 @@ apt-get install -y docker-ce docker-ce-cli containerd.io socat
 	return snap, hadPrior, nil
 }
 
-// Remove deletes only packages dockup installed (names from snapshot).
-// Repo/key files are removed too; volumes/images/vhdx are never touched.
-func Remove(distro string, packages []string) error {
-	if len(packages) > 0 {
-		script := "DEBIAN_FRONTEND=noninteractive apt-get remove -y " + strings.Join(packages, " ")
-		if _, err := wsl.Exec(distro, 10*time.Minute, "sh", "-c", script); err != nil {
+// Remove deletes ONLY what setup added (snapshot): delta packages, created
+// repo/key files, own log files. Images, volumes, vhdx, distro untouched.
+func Remove(distro string, snap state.InstalledByDockup) error {
+	if len(snap.Packages) > 0 {
+		script := "DEBIAN_FRONTEND=noninteractive apt-get remove -y " + strings.Join(snap.Packages, " ")
+		if _, err := wsl.RunRetry(distro, "package removal", 10*time.Minute, 2, script); err != nil {
 			return err
 		}
 	}
-	_, _ = wsl.Exec(distro, 15*time.Second, "sh", "-c",
-		"rm -f "+repoFile+" "+keyFile+"; apt-get update")
+	if len(snap.Repos) > 0 {
+		_, _ = wsl.ExecScript(distro, 15*time.Second, "rm -f "+strings.Join(snap.Repos, " "))
+		_, _ = wsl.ExecScript(distro, 5*time.Minute, "DEBIAN_FRONTEND=noninteractive apt-get update")
+	}
+	if len(snap.Files) > 0 {
+		_, _ = wsl.ExecScript(distro, 15*time.Second, "rm -f "+strings.Join(snap.Files, " "))
+	}
 	return nil
 }

@@ -42,3 +42,21 @@ func Append(distro string, p []byte) error {
 	_, err = f.Write(p)
 	return err
 }
+
+// RotateIfNeeded truncates the log if over cap. Call at daemon start:
+// the child writes via a held handle, so rotation must happen before open.
+func RotateIfNeeded(distro string) error {
+	path, err := PathFor(distro)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if st, err := os.Stat(path); err == nil && st.Size() > maxBytes {
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			return fmt.Errorf("rotate log: %w", err)
+		}
+	}
+	return nil
+}
