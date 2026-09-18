@@ -3,6 +3,7 @@ package debian
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -111,14 +112,16 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y ca-certificates curl gnupg iptables
 `
-	if _, err := wsl.Exec(distro, 10*time.Minute, "sh", "-c", prereq); err != nil {
-		return snap, hadPrior, fmt.Errorf("prereq install failed: %v", err)
+	if _, err := wsl.RunRetry(distro, "prereq install", 10*time.Minute, 3, prereq); err != nil {
+		return snap, hadPrior, err
 	}
 	if err := Preflight(distro); err != nil {
 		return snap, hadPrior, err
 	}
 	codename, fellBack := osCodename(distro)
-	_ = fellBack // surfaced via log line by caller if needed.
+	if fellBack {
+		fmt.Fprintln(os.Stderr, "dockup: trixie detected, using bookworm repo track (Docker repo lag)")
+	}
 	script := `set -e
 export DEBIAN_FRONTEND=noninteractive
 install -m 0755 -d /etc/apt/keyrings
@@ -135,8 +138,8 @@ fi
 apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io socat
 `
-	if _, err := wsl.Exec(distro, 10*time.Minute, "sh", "-c", script); err != nil {
-		return snap, hadPrior, fmt.Errorf("apt setup failed: %v", err)
+	if _, err := wsl.RunRetry(distro, "engine install", 10*time.Minute, 3, script); err != nil {
+		return snap, hadPrior, err
 	}
 	return snap, hadPrior, nil
 }

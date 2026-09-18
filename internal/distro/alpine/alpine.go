@@ -67,8 +67,8 @@ func Setup(distro string) (state.InstalledByDockup, bool, error) {
 		"command -v dockerd && command -v socat && command -v iptables"); err == nil && len(out) > 0 {
 		return snap, hadPrior, nil
 	}
-	if _, err := wsl.Exec(distro, 10*time.Minute, "sh", "-c", "apk add --no-cache iptables"); err != nil {
-		return snap, hadPrior, fmt.Errorf("prereq install failed: %v", err)
+	if _, err := wsl.RunRetry(distro, "prereq install", 10*time.Minute, 3, "apk add --no-cache iptables"); err != nil {
+		return snap, hadPrior, err
 	}
 	if err := Preflight(distro); err != nil {
 		return snap, hadPrior, err
@@ -76,8 +76,8 @@ func Setup(distro string) (state.InstalledByDockup, bool, error) {
 	script := `set -e
 apk add --no-cache docker containerd socat docker-cli-compose
 `
-	if _, err := wsl.Exec(distro, 10*time.Minute, "sh", "-c", script); err != nil {
-		return snap, hadPrior, fmt.Errorf("apk setup failed: %v", err)
+	if _, err := wsl.RunRetry(distro, "engine install", 10*time.Minute, 3, script); err != nil {
+		return snap, hadPrior, err
 	}
 	return snap, hadPrior, nil
 }

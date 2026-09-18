@@ -6,6 +6,8 @@ package wsl
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -86,18 +88,45 @@ func RunningVerbose() ([]byte, error) {
 
 // Exec runs `wsl -d <distro> -u root -- <args...>` with a timeout.
 // Always pass -u root explicitly: default user may be non-root.
+// stderr is never used for control flow, but IS attached to the error
+// so failures are diagnosable (opaque `exit status N` helps nobody).
 func Exec(distro string, timeout time.Duration, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	full := append([]string{"-d", distro, "-u", "root", "--"}, args...)
 	cmd := exec.CommandContext(ctx, "wsl.exe", full...)
-	var stdout bytes.Buffer
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
-	// stderr ignored for control flow.
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return stdout.Bytes(), err
+		return stdout.Bytes(), fmt.Errorf("wsl -d %s: %w\n%s", distro, err, Tail(stderr.Bytes(), 2000))
 	}
 	return stdout.Bytes(), nil
+}
+
+// Tail returns the last n bytes as string, for error context.
+func Tail(b []byte, n int) string {
+	if len(b) <= n {
+		return string(b)
+	}
+	return string(b[len(b)-n:])
+}
+
+// RunRetry runs `sh -c script` as root, retrying transient failures
+// (apt/apk mirror hiccups, dpkg locks on fresh images). Progress and the
+// failing tail go to stderr so CI logs show what happened.
+func RunRetry(distro, what string, timeout time.Duration, tries int, script string) ([]byte, error) {
+	var out []byte
+	var err error
+	for i := 1; i <= tries; i++ {
+		out, err = Exec(distro, timeout, "sh", "-c", script)
+		if err == nil {
+			return out, nil
+		}
+		fmt.Fprintf(os.Stderr, "dockup: %s attempt %d/%d failed, retrying...\n%s\n", what, i, tries, Tail(out, 1500))
+		time.Sleep(time.Duration(i) * 10 * time.Second)
+	}
+	return out, fmt.Errorf("%s failed after %d tries: %w\n%s", what, tries, err, Tail(out, 4000))
 }
 
 // Terminate runs `wsl --terminate <distro>`. Caller must respect the
