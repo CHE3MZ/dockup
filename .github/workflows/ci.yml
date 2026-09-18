@@ -26,7 +26,8 @@ jobs:
         run: |
           $env:GOOS = 'windows'
           $env:GOARCH = 'amd64'
-          go build -o dockup.exe ./cmd/dockup
+          $sha = git rev-parse --short HEAD
+          go build -ldflags "-X main.version=v0.1.0-dev -X main.commit=$sha" -o dockup.exe ./cmd/dockup
           .\dockup.exe version
 
       - uses: actions/upload-artifact@v4

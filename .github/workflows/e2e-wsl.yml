@@ -36,7 +36,8 @@ jobs:
         run: |
           $env:GOOS = 'windows'
           $env:GOARCH = 'amd64'
-          go build -o dockup.exe ./cmd/dockup
+          $sha = git rev-parse --short HEAD
+          go build -ldflags "-X main.version=v0.1.0-dev -X main.commit=$sha" -o dockup.exe ./cmd/dockup
           .\dockup.exe version
 
       - name: Prepare WSL2
@@ -94,6 +95,24 @@ jobs:
       - name: dockup doctor (post-setup)
         run: .\dockup.exe doctor
 
+      - name: Foreground run serves, external shutdown tears down
+        run: |
+          $job = Start-Job { Set-Location $using:PWD; & .\dockup.exe -d Debian }
+          $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
+          $ok = $false
+          for ($i = 1; $i -le 30; $i++) {
+            if (docker version 2>$null) { $ok = $true; break }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $ok) { throw 'foreground relay never came up' }
+          $hw = docker run --rm hello-world
+          if ($hw -notmatch 'Hello from Docker!') { throw 'foreground relay failed hello-world' }
+          .\dockup.exe shutdown
+          if ($LASTEXITCODE -ne 0) { throw 'shutdown of foreground run failed' }
+          $ps = .\dockup.exe ps
+          if ($ps -notmatch 'stopped') { throw "expected stopped ps, got: $ps" }
+          Remove-Job $job -Force -ErrorAction SilentlyContinue
+
       - name: dockup daemon start
         run: |
           .\dockup.exe daemon start -d Debian
@@ -134,6 +153,26 @@ jobs:
           .\dockup.exe cleanup
           if ($LASTEXITCODE -ne 0) { throw 'cleanup reported needs-attention' }
           .\dockup.exe doctor
+
+      # Acceptance: revert removes only the delta, images survive re-setup.
+      - name: Revert cycle (delta-only removal + re-setup + data intact)
+        run: |
+          'y' | .\dockup.exe revert Debian
+          if ($LASTEXITCODE -ne 0) { throw 'revert failed' }
+          $ls = .\dockup.exe list
+          if ($ls -notmatch 'no configured distros') { throw "expected empty config, got: $ls" }
+          wsl -d Debian -- command -v dockerd
+          if ($LASTEXITCODE -eq 0) { throw 'dockerd still present after revert' }
+          .\dockup.exe setup Debian
+          if ($LASTEXITCODE -ne 0) { throw 're-setup failed' }
+          .\dockup.exe daemon start -d Debian
+          if ($LASTEXITCODE -ne 0) { throw 'daemon start after re-setup failed' }
+          Start-Sleep -Seconds 10
+          $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
+          $imgs = docker images --format '{{.Repository}}'
+          if ($imgs -notmatch 'hello-world') { throw "hello-world image did not survive revert cycle, got: $imgs" }
+          .\dockup.exe shutdown
+          if ($LASTEXITCODE -ne 0) { throw 'final shutdown failed' }
 
       - name: Upload dockup state + logs
         if: always()
