@@ -74,12 +74,21 @@ jobs:
           docker compose version
 
       # The image may ship its own daemon on the DEFAULT pipe name, which
-      # would silently answer our relay tests (false pass). Stop/disable it
-      # and gate: no daemon may answer without dockup running.
+      # would silently answer our relay tests (false pass). Discover it,
+      # stop/disable it, and gate: no daemon may answer without dockup.
       - name: Decontaminate default pipe
         run: |
-          Get-Service | Where-Object { $_.Name -like '*docker*' } | Stop-Service -Force -ErrorAction SilentlyContinue
-          Get-Service | Where-Object { $_.Name -like '*docker*' } | Set-Service -StartupType Disabled -ErrorAction SilentlyContinue
+          Write-Host '--- pipes before ---'
+          [System.IO.Directory]::GetFiles('\\.\pipe\') | Select-String 'docker|containerd'
+          Write-Host '--- docker-ish services ---'
+          Get-Service | Where-Object { $_.Name -like '*docker*' -or $_.Name -like '*contain*' } | Format-Table Name, Status, StartType
+          Write-Host '--- docker-ish processes ---'
+          Get-Process | Where-Object { $_.ProcessName -like '*docker*' -or $_.ProcessName -like '*containerd*' } | Format-Table ProcessName, Id
+          Get-Service | Where-Object { $_.Name -like '*docker*' -or $_.Name -like '*contain*' } | Set-Service -StartupType Disabled -ErrorAction SilentlyContinue
+          Get-Service | Where-Object { $_.Name -like '*docker*' -or $_.Name -like '*contain*' } | Stop-Service -Force -ErrorAction SilentlyContinue
+          Get-Process | Where-Object { $_.ProcessName -eq 'dockerd' } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          if (Test-Path '\\.\pipe\docker_engine') { throw 'pipe still held after decontamination' }
           if (docker version 2>$null) { throw 'contaminated runner: a Docker daemon answers without dockup' }
           Write-Host 'pipe clean: no default daemon answering'
 

@@ -1,3 +1,13 @@
+# just in case
 *.DS_Store
+
+# build
 /dockup.exe
 /dockup
+/build/
+
+# logs
+logs/
+
+# mkdocs (site)
+docs/site
