@@ -101,6 +101,7 @@ jobs:
           docker version >$null 2>$null
           if ($LASTEXITCODE -eq 0) { throw 'contaminated runner: a Docker daemon answers without dockup' }
           Write-Host 'pipe clean: no default daemon answering'
+          exit 0
 
       - name: dockup doctor (pre-setup)
         run: .\dockup.exe doctor
