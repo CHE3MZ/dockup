@@ -23,7 +23,12 @@ func Detect(distro string) Family {
 	if err != nil {
 		return Unknown
 	}
-	text := strings.ToLower(string(out))
+	return ParseOSRelease(string(out))
+}
+
+// ParseOSRelease maps /etc/os-release text to a family. Pure (unit-tested).
+func ParseOSRelease(osRelease string) Family {
+	text := strings.ToLower(osRelease)
 	if strings.Contains(text, "id=alpine") {
 		return Alpine
 	}

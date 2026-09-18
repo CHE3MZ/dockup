@@ -10,7 +10,7 @@ import (
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
-var dockupPackages = []string{"docker-ce", "docker-ce-cli", "containerd.io", "socat"}
+var dockupPackages = []string{"docker-ce", "docker-ce-cli", "containerd.io", "socat", "iptables"}
 const repoFile = "/etc/apt/sources.list.d/docker.list"
 const keyFile = "/etc/apt/keyrings/docker.asc"
 
@@ -25,15 +25,43 @@ func HasDocker(distro string) bool {
 	return err == nil
 }
 
-// Snapshot captures pre-install state so revert removes only the delta.
+// Snapshot captures pre-install state so revert removes only the delta:
+// packages limited to ones NOT already installed, repo files limited to
+// ones we actually create.
 func Snapshot(distro string) (state.InstalledByDockup, bool) {
 	hadPrior := HasDocker(distro)
+	keep := installedPkgs(distro)
+	var delta []string
+	for _, p := range dockupPackages {
+		if !keep[p] {
+			delta = append(delta, p)
+		}
+	}
+	var repos []string
+	for _, f := range []string{repoFile, keyFile} {
+		if _, err := wsl.Exec(distro, 15*time.Second, "sh", "-c", "test -f "+f); err != nil {
+			repos = append(repos, f) // absent now => setup creates it => revert removes it
+		}
+	}
 	snap := state.InstalledByDockup{
-		Packages: append([]string{}, dockupPackages...),
-		Repos:    []string{repoFile, keyFile},
+		Packages: delta,
+		Repos:    repos,
 		Files:    []string{"/var/log/dockup-dockerd.log", "/var/log/dockup-containerd.log", "/var/log/dockup-socat.log"},
 	}
 	return snap, hadPrior
+}
+
+// installedPkgs returns the subset of dockupPackages already installed.
+func installedPkgs(distro string) map[string]bool {
+	out, _ := wsl.Exec(distro, 15*time.Second, "sh", "-c",
+		"for p in "+strings.Join(dockupPackages, " ")+"; do dpkg-query -W -f='${Status}' \"$p\" 2>/dev/null | grep -q 'install ok installed' && echo \"KEEP:$p\"; done")
+	keep := map[string]bool{}
+	for _, line := range strings.Split(string(out), "\n") {
+		if name, ok := strings.CutPrefix(strings.TrimSpace(line), "KEEP:"); ok {
+			keep[name] = true
+		}
+	}
+	return keep
 }
 
 // Preflight checks kernel features dockerd needs. Fails with a clear message
@@ -67,24 +95,32 @@ func osCodename(distro string) (codename string, trixieFallback bool) {
 }
 
 // Setup installs docker-ce, containerd.io, socat from Docker's official repo.
-// Idempotent: if engine + socat already present, verifies repo and returns
-// the snapshot without reinstalling. Returns snapshot + hadPrior for state.
+// Idempotent: if engine + socat + iptables already present, returns the
+// snapshot without reinstalling. Prereqs (incl. iptables, which minimal WSL
+// images lack) install BEFORE the preflight so the preflight is meaningful.
+// Returns snapshot + hadPrior for state.
 func Setup(distro string) (state.InstalledByDockup, bool, error) {
 	snap, hadPrior := Snapshot(distro)
+	// Idempotent fast-path: everything already present.
+	if out, err := wsl.Exec(distro, 15*time.Second, "sh", "-c",
+		"command -v dockerd && command -v socat && command -v iptables && test -f "+repoFile); err == nil && len(out) > 0 {
+		return snap, hadPrior, nil
+	}
+	prereq := `set -e
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y ca-certificates curl gnupg iptables
+`
+	if _, err := wsl.Exec(distro, 10*time.Minute, "sh", "-c", prereq); err != nil {
+		return snap, hadPrior, fmt.Errorf("prereq install failed: %v", err)
+	}
 	if err := Preflight(distro); err != nil {
 		return snap, hadPrior, err
-	}
-	// Idempotent fast-path: dockerd + socat binaries present.
-	if out, err := wsl.Exec(distro, 15*time.Second, "sh", "-c",
-		"command -v dockerd && command -v socat && test -f "+repoFile); err == nil && len(out) > 0 {
-		return snap, hadPrior, nil
 	}
 	codename, fellBack := osCodename(distro)
 	_ = fellBack // surfaced via log line by caller if needed.
 	script := `set -e
 export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y ca-certificates curl gnupg
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
