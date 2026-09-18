@@ -186,7 +186,11 @@ Rules:
   (`//go:build windows` guards on windows-specific files).
 - Deps minimal: `go-winio` (named pipe), stdlib flags (prefer stdlib if clean,
   else cobra), picker via simple numbered stdin prompt (no TUI lib).
-- WSL interop: exec `wsl.exe -d <distro> -u root -- <sh -c '...'>`. Handle `wsl.exe`
+- WSL interop: exec `wsl.exe -d <distro> -u root -- <sh -c '...'>` for simple
+  quoteless one-liners ONLY. Any script containing quotes, `$()`, or
+  redirections MUST go via stdin (`sh -s` + ExecScript): wsl.exe corrupts
+  double quotes/`$()` passed as argv (proven: `ARCH=$(...)` arrives empty,
+  which wrote a broken docker.list). Handle `wsl.exe`
   UTF-16 stdout when parsing. Timeouts on every exec. Never parse `wsl.exe`
   stderr for control flow. Use `setsid nohup` + PID capture for daemons.
 - Windows process mgmt: `os/exec` + `syscall` for hidden windows

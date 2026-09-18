@@ -112,14 +112,14 @@ func Tail(b []byte, n int) string {
 	return string(b[len(b)-n:])
 }
 
-// RunRetry runs `sh -c script` as root, retrying transient failures
-// (apt/apk mirror hiccups, dpkg locks on fresh images). Progress and the
-// failing tail go to stderr so CI logs show what happened.
+// RunRetry runs a multi-line script as root via stdin (see ExecScript),
+// retrying transient failures (apt/apk mirror hiccups, dpkg locks on fresh
+// images). Progress and the failing tail go to stderr so CI logs show why.
 func RunRetry(distro, what string, timeout time.Duration, tries int, script string) ([]byte, error) {
 	var out []byte
 	var err error
 	for i := 1; i <= tries; i++ {
-		out, err = Exec(distro, timeout, "sh", "-c", script)
+		out, err = ExecScript(distro, timeout, script)
 		if err == nil {
 			return out, nil
 		}
@@ -127,6 +127,26 @@ func RunRetry(distro, what string, timeout time.Duration, tries int, script stri
 		time.Sleep(time.Duration(i) * 10 * time.Second)
 	}
 	return out, fmt.Errorf("%s failed after %d tries: %w\n%s", what, tries, err, Tail(out, 4000))
+}
+
+// ExecScript runs a multi-line shell script as root via STDIN (`sh -s`).
+// Use this for ANY script containing quotes, $(), or redirections:
+// wsl.exe corrupts double quotes/$() passed as command-line args
+// (verified: `sh -c 'ARCH=$(...); echo "[$ARCH]"'` arrives with ARCH empty,
+// while the same script via stdin works). Stdin passes byte-identical.
+// Keep Exec for simple quoteless one-liner probes only.
+func ExecScript(distro string, timeout time.Duration, script string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "wsl.exe", "-d", distro, "-u", "root", "--", "sh", "-s")
+	cmd.Stdin = strings.NewReader(script)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return stdout.Bytes(), fmt.Errorf("wsl -d %s script: %w\n%s", distro, err, Tail(stderr.Bytes(), 2000))
+	}
+	return stdout.Bytes(), nil
 }
 
 // Terminate runs `wsl --terminate <distro>`. Caller must respect the
