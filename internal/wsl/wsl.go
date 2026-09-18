@@ -81,11 +81,6 @@ func Running() (map[string]bool, error) {
 	return set, nil
 }
 
-// RunningVerbose is `wsl --list --verbose` raw output for `list` (name+version).
-func RunningVerbose() ([]byte, error) {
-	return runWsl(context.Background(), "--list", "--verbose")
-}
-
 // Exec runs `wsl -d <distro> -u root -- <args...>` with a timeout.
 // Always pass -u root explicitly: default user may be non-root.
 // stderr is never used for control flow, but IS attached to the error
