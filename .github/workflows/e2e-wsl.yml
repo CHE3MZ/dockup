@@ -1,0 +1,61 @@
+name: e2e-wsl
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      full-setup:
+        description: 'Run full dockup setup (downloads ~250MB + installs docker in WSL)'
+        required: false
+        default: 'false'
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: wsl version
+        run: wsl --version
+      - name: wsl list
+        run: wsl --list --quiet
+      - name: build
+        run: go build -o dockup.exe ./cmd/dockup
+      - name: version
+        run: .\dockup.exe version
+      - name: doctor (no setup yet)
+        run: .\dockup.exe doctor
+      - name: ps (expect stopped)
+        run: .\dockup.exe ps
+      - name: daemon status (expect stopped)
+        run: .\dockup.exe daemon status
+        continue-on-error: true
+      - name: setup rejects double arch flags
+        run: .\dockup.exe setup --amd --arm
+        continue-on-error: true
+  full-setup:
+    if: github.event.inputs.full-setup == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: build
+        run: go build -o dockup.exe ./cmd/dockup
+      - name: setup dockup (amd64)
+        run: echo y | .\dockup.exe setup --amd
+      - name: doctor after setup
+        run: .\dockup.exe doctor
+      - name: daemon start
+        run: .\dockup.exe daemon start
+      - name: daemon status
+        run: .\dockup.exe daemon status
+      - name: docker version via pipe
+        run: docker version
+      - name: daemon stop
+        run: .\dockup.exe daemon stop
+      - name: shutdown
+        run: .\dockup.exe shutdown
