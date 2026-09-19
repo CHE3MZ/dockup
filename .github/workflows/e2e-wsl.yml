@@ -117,12 +117,18 @@ jobs:
         run: .\dockup.exe doctor
 
       # No-autostart proof: setup must leave binaries present but NOTHING running.
+      # Forensics first (ps + unit state), asserts after.
       - name: In-distro engine check (binaries yes, autostart no)
         run: |
           wsl -d Debian -u root -- command -v dockerd
           if ($LASTEXITCODE -ne 0) { throw 'dockerd missing after setup' }
           wsl -d Debian -u root -- command -v socat
           if ($LASTEXITCODE -ne 0) { throw 'socat missing after setup' }
+          Write-Host '--- forensics: processes ---'
+          wsl -d Debian -u root -- ps aux | Select-String 'docker|containerd'
+          Write-Host '--- forensics: unit state ---'
+          wsl -d Debian -u root -- systemctl is-active docker.service docker.socket containerd.service
+          wsl -d Debian -u root -- systemctl is-enabled docker.service docker.socket containerd.service
           wsl -d Debian -u root -- test -S /var/run/docker.sock
           if ($LASTEXITCODE -eq 0) { throw 'engine autostarted by setup (must stay down until dockup run)' }
           Write-Host 'binaries present, engine down: no autostart'

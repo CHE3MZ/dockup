@@ -86,10 +86,14 @@ apk add --no-cache docker containerd socat docker-cli-compose
 		return snap, hadPrior, fmt.Errorf("engine install finished but binaries missing: %v", err)
 	}
 	// Never autostart under OpenRC either (only when WE installed it —
-	// never touch a pre-existing install's services).
+	// never touch a pre-existing install's services). Verified, not assumed.
 	if !hadPrior {
 		_, _ = wsl.ExecScript(distro, 30*time.Second,
 			"rc-update del docker default 2>/dev/null; rc-update del containerd default 2>/dev/null; rc-service docker stop 2>/dev/null; rc-service containerd stop 2>/dev/null; true")
+		if out, _ := wsl.Exec(distro, 15*time.Second, "sh", "-c",
+			"pidof dockerd containerd 2>/dev/null || true"); len(strings.TrimSpace(string(out))) > 0 {
+			return snap, hadPrior, fmt.Errorf("engine still running after stop (pids %s) — stop docker/containerd services manually, then re-run setup", strings.TrimSpace(string(out)))
+		}
 	} else {
 		fmt.Fprintln(os.Stderr, "dockup: warning: pre-existing docker install kept as-is (may conflict on the socket)")
 	}

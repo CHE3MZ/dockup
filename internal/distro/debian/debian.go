@@ -151,9 +151,23 @@ apt-get install -y docker-ce docker-ce-cli containerd.io socat
 	// would autostart the engine on every WSL boot and double-run beside
 	// ours. dockup owns these processes exclusively: disable everything —
 	// but only when WE caused it (never touch a pre-existing install).
+	// Verified, not assumed: unit names differ across releases and a
+	// Restart=always service self-heals a stop without a disable.
 	if !hadPrior {
 		_, _ = wsl.ExecScript(distro, 30*time.Second,
 			"command -v systemctl >/dev/null && systemctl disable --now docker.service docker.socket containerd.service || true")
+		if out, err := wsl.Exec(distro, 15*time.Second, "sh", "-c",
+			"command -v systemctl >/dev/null && systemctl is-enabled docker.service docker.socket containerd.service 2>/dev/null || true"); err == nil {
+			for _, line := range strings.Split(string(out), "\n") {
+				if s := strings.TrimSpace(line); s == "enabled" || s == "enabled-runtime" {
+					return snap, hadPrior, fmt.Errorf("autostart units still enabled — disable docker/containerd units manually, then re-run setup")
+				}
+			}
+		}
+		if out, _ := wsl.Exec(distro, 15*time.Second, "sh", "-c",
+			"pidof dockerd containerd 2>/dev/null || true"); len(strings.TrimSpace(string(out))) > 0 {
+			return snap, hadPrior, fmt.Errorf("engine still running after disable (pids %s) — stop docker/containerd units manually, then re-run setup", strings.TrimSpace(string(out)))
+		}
 	} else {
 		fmt.Fprintln(os.Stderr, "dockup: warning: pre-existing docker install kept as-is (may conflict on the socket)")
 	}
