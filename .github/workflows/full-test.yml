@@ -14,7 +14,7 @@ jobs:
       - name: vet
         run: go vet ./...
       - name: unit tests
-        run: go test ./...
+        run: go test -race ./...
       - name: build
         run: go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
       - name: version is stamped with commit
@@ -73,6 +73,12 @@ jobs:
         run: |
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path = $($c.default_path)" }
+          if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
+      - name: reinstall over existing distro
+        timeout-minutes: 15
+        run: |
+          echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
+          $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
       - name: diagnose setup failure
         if: failure()

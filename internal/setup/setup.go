@@ -150,7 +150,7 @@ func RunEx(o Options) int {
 
 	// 2. Import.
 	logx.Info("importing debian into WSL as \"dockup\"... (0%%)")
-	if err := os.MkdirAll(installDir, 0o755); err != nil {
+	if err := os.MkdirAll(installDir, 0o700); err != nil {
 		logx.Err("mkdir wsl dir: %v", err)
 		return 1
 	}

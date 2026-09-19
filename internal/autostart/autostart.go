@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -35,7 +36,7 @@ func IsEnabled() bool {
 }
 
 func psQuote(s string) string {
-	return "'" + s + "'"
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 // SetEnabled creates (on=true) or removes (on=false) the Startup shortcut
@@ -66,7 +67,7 @@ func SetEnabled(exe string, on bool) error {
 		psQuote(ShortcutPath()), psQuote(exe), psQuote(filepath.Dir(exe)))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "powershell.exe",
+	cmd := exec.CommandContext(ctx, "powershell.exe", // #nosec G204 -- fixed binary; script is built internally, never from user input
 		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
 		"-Command", script)
 	if out, err := cmd.CombinedOutput(); err != nil {

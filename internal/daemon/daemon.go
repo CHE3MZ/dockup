@@ -6,6 +6,7 @@ package daemon
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,7 @@ import (
 
 // processAlive checks a PID via OpenProcess.
 func processAlive(pid int) bool {
-	if pid <= 0 {
+	if pid <= 0 || uint64(pid) > uint64(math.MaxUint32) {
 		return false
 	}
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
@@ -64,13 +65,13 @@ func Start() error {
 		if err != nil {
 			return err
 		}
-		_ = os.MkdirAll(filepath.Dir(config.LogFile()), 0o755)
-		logf, err := os.OpenFile(config.LogFile(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		_ = os.MkdirAll(filepath.Dir(config.LogFile()), 0o700)
+		logf, err := os.OpenFile(config.LogFile(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 		if err != nil {
 			return err
 		}
 		defer func() { _ = logf.Close() }()
-		cmd := exec.Command(exe, "__serve")
+		cmd := exec.Command(exe, "__serve") // #nosec G204 -- exe is our own binary with a fixed subcommand; no shell involved
 		cmd.Stdout = logf
 		cmd.Stderr = logf
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}

@@ -43,7 +43,7 @@ func Fetch(url, dest string, onProgress Progress) error {
 		return fmt.Errorf("download %s: HTTP %s", url, resp.Status)
 	}
 	total := resp.ContentLength
-	f, err := os.Create(dest)
+	f, err := os.Create(dest) // #nosec G304 -- dest is our own temp path, never remote input
 	if err != nil {
 		return err
 	}

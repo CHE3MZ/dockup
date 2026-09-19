@@ -34,11 +34,11 @@ func Err(format string, a ...any) {
 // Append writes to the daemon log, rotating when over config.MaxLogBytes.
 func Append(msg string) {
 	path := config.LogFile()
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
 	if st, err := os.Stat(path); err == nil && st.Size() > config.MaxLogBytes {
 		rotate(path)
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) // #nosec G304 -- path is our own log file location, never remote input
 	if err != nil {
 		return
 	}

@@ -106,14 +106,14 @@ func (c Config) WithDefaults() Config {
 
 // Save writes config.json (creating ~/.dockup as needed).
 func Save(c Config) error {
-	if err := os.MkdirAll(Dir(), 0o755); err != nil {
+	if err := os.MkdirAll(Dir(), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(c.WithDefaults(), "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(File(), append(data, '\n'), 0o644)
+	return os.WriteFile(File(), append(data, '\n'), 0o600)
 }
 
 // Ensure creates the bare-minimum config on first run and returns it.

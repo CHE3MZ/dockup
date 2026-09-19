@@ -217,7 +217,7 @@ func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) er
 
 func bridgeConn(client net.Conn, distro string) {
 	defer func() { _ = client.Close() }()
-	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--",
+	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--", // #nosec G204 -- fixed binary and argv; distro is our constant, never a shell
 		"socat", "STDIO", "UNIX-CONNECT:/var/run/docker.sock")
 	toProc, err := cmd.StdinPipe()
 	if err != nil {

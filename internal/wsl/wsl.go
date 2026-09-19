@@ -55,7 +55,7 @@ func DecodeWslOutput(data []byte) string {
 func runWsl(ctx context.Context, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "wsl.exe", args...)
+	cmd := exec.CommandContext(ctx, "wsl.exe", args...) // #nosec G204 -- fixed binary, argv never touches a shell
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -128,7 +128,7 @@ func Exec(distro string, timeout time.Duration, args ...string) ([]byte, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	full := append([]string{"-d", distro, "-u", "root", "--"}, args...)
-	cmd := exec.CommandContext(ctx, "wsl.exe", full...)
+	cmd := exec.CommandContext(ctx, "wsl.exe", full...) // #nosec G204 -- fixed binary, argv never touches a shell
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -144,7 +144,7 @@ func Exec(distro string, timeout time.Duration, args ...string) ([]byte, error) 
 func ExecScript(distro string, timeout time.Duration, script string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "wsl.exe", "-d", distro, "-u", "root", "--", "sh", "-s")
+	cmd := exec.CommandContext(ctx, "wsl.exe", "-d", distro, "-u", "root", "--", "sh", "-s") // #nosec G204 -- fixed binary and argv; script goes via stdin, never a shell
 	cmd.Stdin = strings.NewReader(script)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -184,7 +184,7 @@ func Import(distro, dir, tar string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "wsl.exe", "--import", distro, dir, tar, "--version", "2")
+	cmd := exec.CommandContext(ctx, "wsl.exe", "--import", distro, dir, tar, "--version", "2") // #nosec G204 -- fixed binary, argv never touches a shell
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

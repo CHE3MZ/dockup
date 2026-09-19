@@ -547,7 +547,7 @@ func daemonLog() int {
 			return 0
 		default:
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- path is our own log file location, never remote input
 		if err != nil {
 			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: no log yet (%v)", err)))
 			time.Sleep(2 * time.Second)

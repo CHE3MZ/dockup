@@ -44,7 +44,7 @@ func Load() (State, error) {
 
 // Save writes state.json atomically.
 func Save(s State) error {
-	if err := os.MkdirAll(filepath.Dir(config.StateFile()), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(config.StateFile()), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
@@ -52,7 +52,7 @@ func Save(s State) error {
 		return err
 	}
 	tmp := config.StateFile() + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, config.StateFile())
@@ -66,12 +66,12 @@ func ClearDaemon(s *State) {
 // WithLock serializes read-modify-write via a lockfile with retries.
 // Portable (no syscalls): create-exclusive + stale-age expiry.
 func WithLock(fn func(s *State) error) error {
-	if err := os.MkdirAll(filepath.Dir(config.LockFile()), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(config.LockFile()), 0o700); err != nil {
 		return err
 	}
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		f, err := os.OpenFile(config.LockFile(), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(config.LockFile(), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			_, _ = fmt.Fprint(f, os.Getpid())
 			_ = f.Close()
