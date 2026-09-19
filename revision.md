@@ -72,3 +72,11 @@ that "dockup is already running as a foreground process, ctrl + C it to stop it 
 * dockup shutdown ## stop all dockup processes including foreground and background daemon processes
 * dockup doctor ## repair stale state and fix other issues and do other checks and preflight checks
 * dockup version ## print "you're running the latest/dev version." for now.
+
+```
+
+# A Quick Technical Note :
+
+standard TCP/named-pipe connections from Windows CLI to a WSL Docker daemon often struggle with interactive flags (-i, -t, or terminal TTY resizing) unless specially handled.
+
+Docker Desktop solves this using a custom Windows named pipe (\\.\pipe\docker_engine) that translates Windows console handles directly into the WSL socket via a companion helper process (docker-proxy / backend service). we will likely need a similar socket/stream-forwarding mechanism so container logs and interactive sessions (docker run -it) pipe cleanly back to the Windows command prompt.
