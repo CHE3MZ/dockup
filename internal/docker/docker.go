@@ -48,7 +48,7 @@ func Install(distro string) error {
 	if err != nil {
 		return fmt.Errorf("kernel preflight: %w (out: %s)", err, wsl.Tail(out, 1000))
 	}
-	_, err := wsl.RunRetry(distro, "install docker", 10*time.Minute, 3, InstallScript)
+	_, err = wsl.RunRetry(distro, "install docker", 10*time.Minute, 3, InstallScript)
 	return err
 }
 
