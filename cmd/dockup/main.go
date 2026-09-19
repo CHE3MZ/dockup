@@ -9,10 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CHE3MZ/dockup/internal/autostart"
 	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/daemon"
 	"github.com/CHE3MZ/dockup/internal/doctor"
 	"github.com/CHE3MZ/dockup/internal/logx"
+	"github.com/CHE3MZ/dockup/internal/pstable"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/setup"
 	"github.com/CHE3MZ/dockup/internal/state"
@@ -149,8 +151,8 @@ func usage() {
   ` + ui.Bold("dockup") + `                  foreground run (Ctrl+C to stop)
   ` + ui.Bold("dockup setup [--amd|--arm] [--path=DIR] [--dry-run]") + `
   ` + ui.Bold("dockup uninstall") + `
-  ` + ui.Bold("dockup ps") + `
-  ` + ui.Bold("dockup daemon start|stop|restart|status|log") + `
+  ` + ui.Bold("dockup ps") + `                     STATUS / AUTOSTART table
+  ` + ui.Bold("dockup daemon start|stop|restart|status|log|autostart") + `
   ` + ui.Bold("dockup shutdown") + `           stop everything
   ` + ui.Bold("dockup doctor") + `             preflight + repair stale state
   ` + ui.Bold("dockup version") + `
@@ -216,7 +218,14 @@ func uninstallHelp() {
 
 func psHelp() {
 	fmt.Print(ui.Header("dockup ps") + `
-  Show dockup status: ` + ui.Green("running") + ` (foreground/daemon) or ` + ui.White("stopped") + `.
+  Show dockup status as a table (bold headers, plain values):
+
+    STATUS      AUTOSTART
+    running     off
+
+  STATUS is ` + ui.Green("running") + ` (engine answering), ` + ui.White("starting...") + `
+  (bridge up, engine still booting) or ` + ui.White("stopped") + `.
+  AUTOSTART mirrors ~/.dockup/config.json (` + ui.Cyan("on") + `/` + ui.Cyan("off") + `).
 
 ` + ui.LightBlue("Usage:") + `
   dockup ps
@@ -233,6 +242,9 @@ func daemonHelp() {
   dockup daemon restart   restart the background process
   dockup daemon status    brief health (running / stopped)
   dockup daemon log       follow the log (read-only, Ctrl+C to exit)
+  dockup daemon autostart [on|off]
+                          query (no arg) or set Windows login autostart
+                          (default off, stored in ~/.dockup/config.json)
 `)
 }
 
@@ -353,25 +365,19 @@ func serveForever(cfg userconfig.Config) int {
 func cmdPs(cfg userconfig.Config) int {
 	s, _ := state.Load()
 	pipe := cfg.EffectivePipe()
-	tcpNote := ""
+	alive := relay.AliveOn(pipe)
+	status := pstable.Classify(alive, s.Installed, alive && relay.EngineReady(pipe))
+	fmt.Println(pstable.Render(status, cfg.Autostart))
+	if alive && !s.Installed {
+		fmt.Printf("%s\n", ui.Gray("(pipe held by another program, not dockup)"))
+	}
 	if cfg.UseTCP {
 		if relay.TCPAlive(cfg.TCPAddr()) {
-			tcpNote = " tcp " + cfg.TCPAddr() + " ok"
+			fmt.Printf("%s\n", ui.Gray(fmt.Sprintf("tcp %s ok", cfg.TCPAddr())))
 		} else {
-			tcpNote = " tcp " + cfg.TCPAddr() + " down"
+			fmt.Printf("%s\n", ui.Gray(fmt.Sprintf("tcp %s down", cfg.TCPAddr())))
 		}
 	}
-	if relay.AliveOn(pipe) {
-		if s.Daemon.PID != 0 && daemon.DaemonAlive(s) {
-			fmt.Printf("%s\n", ui.Green(fmt.Sprintf("running (daemon pid %d%s)", s.Daemon.PID, tcpNote)))
-		} else if s.Installed {
-			fmt.Printf("%s\n", ui.Green(fmt.Sprintf("running (foreground%s)", tcpNote)))
-		} else {
-			fmt.Printf("%s\n", ui.White("stopped (pipe held by another program, not dockup)"))
-		}
-		return 0
-	}
-	fmt.Printf("%s\n", ui.White("stopped"))
 	return 0
 }
 
@@ -417,10 +423,58 @@ func cmdDaemon(cfg userconfig.Config, args []string) int {
 		return daemon.Status()
 	case "log":
 		return daemonLog()
+	case "autostart":
+		return cmdAutostart(args[1:])
 	default:
 		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: unknown daemon command %q", args[0])))
 		return 1
 	}
+}
+
+// cmdAutostart queries or sets Windows login autostart.
+// `dockup daemon autostart` prints "autostart: on|off";
+// `dockup daemon autostart on|off` applies it (config + Startup entry).
+func cmdAutostart(args []string) int {
+	if hasHelpFlag(args) {
+		daemonHelp()
+		return 0
+	}
+	cfg, err := userconfig.Ensure()
+	if err != nil {
+		logx.Err("%v", err)
+		return 1
+	}
+	cfg = cfg.WithDefaults()
+	if len(args) == 0 {
+		fmt.Printf("%s\n", ui.White(fmt.Sprintf("autostart: %s", pstable.AutostartText(cfg.Autostart))))
+		return 0
+	}
+	if len(args) > 1 {
+		logx.Err("usage: dockup daemon autostart [on|off]")
+		return 1
+	}
+	var on bool
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "on", "enable", "true":
+		on = true
+	case "off", "disable", "false":
+		on = false
+	default:
+		logx.Err("usage: dockup daemon autostart [on|off]")
+		return 1
+	}
+	exe, _ := os.Executable()
+	if err := autostart.SetEnabled(exe, on); err != nil {
+		logx.Err("%v", err)
+		return 1
+	}
+	cfg.Autostart = on
+	if err := userconfig.Save(cfg); err != nil {
+		logx.Err("%v", err)
+		return 1
+	}
+	logx.Ok("autostart: %s", pstable.AutostartText(on))
+	return 0
 }
 
 // daemonLog tails the log file read-only until Ctrl+C.

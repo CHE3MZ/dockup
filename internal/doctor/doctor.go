@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/CHE3MZ/dockup/internal/autostart"
 	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
@@ -51,6 +52,18 @@ func Run() error {
 			ok(fmt.Sprintf("tcp bridge %s enabled", ucfg.TCPAddr()))
 		} else {
 			logx.Info("info: tcp bridge disabled (port %d reserved)", ucfg.EffectivePort())
+		}
+		autostartText := "off"
+		if ucfg.Autostart {
+			autostartText = "on"
+		}
+		ok(fmt.Sprintf("autostart %s", autostartText))
+		// Reconcile the Startup entry with the setting (info-level only).
+		if ucfg.Autostart && !autostart.IsEnabled() {
+			logx.Info("info: autostart on but no Startup entry — run dockup daemon autostart on to repair")
+		}
+		if !ucfg.Autostart && autostart.IsEnabled() {
+			logx.Info("info: Startup entry present but autostart off — run dockup daemon autostart off to remove")
 		}
 	}
 

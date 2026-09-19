@@ -20,9 +20,9 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/Microsoft/go-winio"
 	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/userconfig"
+	"github.com/Microsoft/go-winio"
 )
 
 // PipeName re-exports the default pipe.
@@ -57,6 +57,45 @@ func TCPAlive(addr string) bool {
 	}
 	_ = c.Close()
 	return true
+}
+
+// EngineReady asks the Engine API (GET /_ping) through the named pipe.
+// True = dockerd is answering. False = pipe held by nothing useful, or the
+// engine is still booting (ps reports "starting..." then).
+func EngineReady(pipe string) bool {
+	if pipe == "" {
+		pipe = PipeName
+	}
+	timeout := 4 * time.Second
+	c, err := winio.DialPipe(pipe, &timeout)
+	if err != nil {
+		return false
+	}
+	defer c.Close()
+	_ = c.SetDeadline(time.Now().Add(timeout))
+	if _, err := c.Write([]byte("GET /_ping HTTP/1.0\r\nHost: localhost\r\n\r\n")); err != nil {
+		return false
+	}
+	buf := make([]byte, 512)
+	n, err := c.Read(buf)
+	if err != nil || n == 0 {
+		return false
+	}
+	return ParsePingOK(buf[:n])
+}
+
+// ParsePingOK reports whether an HTTP response head signals success.
+// Pure (unit-testable): Docker answers /_ping with "200 OK".
+func ParsePingOK(head []byte) bool {
+	if len(head) < 12 {
+		return false
+	}
+	for i := 0; i+3 <= len(head); i++ {
+		if head[i] == '2' && head[i+1] == '0' && head[i+2] == '0' {
+			return true
+		}
+	}
+	return false
 }
 
 // WaitAlive polls until the default pipe answers or timeout elapses.

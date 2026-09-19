@@ -6,7 +6,8 @@
 //	  "port": 2375,
 //	  "use_tcp": false,
 //	  "pipe_name": "\\\\.\\pipe\\dockup_engine",
-//	  "color": true
+//	  "color": true,
+//	  "autostart": false
 //	}
 //
 // default_path is the prefilled install location for the next `dockup setup`
@@ -43,6 +44,7 @@ type Config struct {
 	UseTCP      bool   `json:"use_tcp"`
 	PipeName    string `json:"pipe_name"`
 	Color       bool   `json:"color"`
+	Autostart   bool   `json:"autostart"`
 }
 
 // Dir is ~/.dockup.
@@ -66,6 +68,7 @@ func Defaults() Config {
 		UseTCP:      false,
 		PipeName:    DefaultPipeName,
 		Color:       true,
+		Autostart:   false,
 	}
 }
 

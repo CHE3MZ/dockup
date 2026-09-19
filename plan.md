@@ -535,7 +535,6 @@ dir, URLs, config path, pipe/TCP plan and changes nothing (no download,
 no import, no unregister).
 
 ### 10.6 New workflows
-
 - `.github/workflows/full-test.yml` (push + dispatch): vet, unit, build,
   help matrix, dry-run creates nothing, config bare-minimum check, custom
   `--path` setup, config default/current assertions, doctor, daemon
@@ -547,4 +546,20 @@ no import, no unregister).
   build, setup, daemon start, `docker version` + `hello-world` through the
   scoop-installed CLI via `DOCKER_HOST=npipe:////./pipe/dockup_engine`,
   stop, shutdown.
+
+### 10.7 Login autostart + `ps` table
+
+- `~/.dockup/config.json` gains `"autostart": false` (default off).
+- `dockup daemon autostart` prints `autostart: on|off`;
+  `dockup daemon autostart on|off` writes the config AND creates/removes
+  `%APPDATA%\...\Startup\dockup.lnk` (`<exe> daemon start`, minimized).
+  Implemented in `internal/autostart` (PowerShell `WScript.Shell`, no new
+  Go deps); `doctor` reconciles entry vs setting at info level.
+- `dockup ps` renders a bold-header/plain-value table (`internal/pstable`):
+  `STATUS` = `running` (pipe up + `GET /_ping` answers `200 OK` via
+  `relay.EngineReady`), `starting...` (pipe up, engine not answering yet),
+  `stopped`; `AUTOSTART` = `on`/`off` from config. Decision logic is pure
+  (`Classify`) and unit-tested; TCP state (when enabled) follows as a gray
+  line. `full-test.yml` asserts query/set/config/shortcut/`ps`/doctor for
+  the whole cycle.
 

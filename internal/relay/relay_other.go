@@ -22,6 +22,22 @@ func AliveOn(_ string) bool { return false }
 // TCPAlive always false off Windows.
 func TCPAlive(_ string) bool { return false }
 
+// EngineReady always false off Windows.
+func EngineReady(_ string) bool { return false }
+
+// ParsePingOK is pure and shared across platforms.
+func ParsePingOK(head []byte) bool {
+	if len(head) < 12 {
+		return false
+	}
+	for i := 0; i+3 <= len(head); i++ {
+		if head[i] == '2' && head[i+1] == '0' && head[i+2] == '0' {
+			return true
+		}
+	}
+	return false
+}
+
 // WaitAlive always false off Windows.
 func WaitAlive(_ time.Duration) bool { return false }
 
