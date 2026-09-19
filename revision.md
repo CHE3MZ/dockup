@@ -75,6 +75,23 @@ that "dockup is already running as a foreground process, ctrl + C it to stop it 
 
 ```
 
+# project structure :
+
+* cli goes into cmd/dockup/main.go
+* the codebase itself for everything goes into internal/ ideally as seperate folders for important things.
+* build and test scripts etc. go into the scripts/ folder.
+* tests go into the test/ folder.
+* IMPORTANT : workflows go into .github/workflows , workflows must be used for testing, testing should be done using
+github workflows , NOT locally , run github workflows remotely using "gh workflow run <NAME>" and "gh run list" and
+"gh run view <ID>" to run workflows list them and check their status and logs via "run and gh run view <RUN_ID>". 
+All automations including CI CD, tests of WSL on windows and dockup on windows and dockup tests must ALL be done using gh , 
+the host machine shall NOT be used for anything besides seeing if dockup compiles properly. the only other thing that can be 
+done on the host machine is run scripts\ops\go-bugcheck.sh for linting, so host machine can only ; 1-compile dockup for 
+comilation tests, 2-run the bugcheck script, it shall NOT be used for running dockup commands like dockup etc. and the host 
+machine system shall not be touched or modified, github actions already provides enough stuff to do testing etc. make sure to 
+frequently check the gh actions logs though, do not blindly run the actions , see if they failed or not and see what the logs 
+gave back, again gh run view <ID> to view run and gh run view <RUN_ID> --log for logs.
+
 # A Quick Technical Note :
 
 standard TCP/named-pipe connections from Windows CLI to a WSL Docker daemon often struggle with interactive flags (-i, -t, or terminal TTY resizing) unless specially handled.
