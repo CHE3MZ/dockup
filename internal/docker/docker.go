@@ -34,16 +34,19 @@ systemctl start docker.service || true
 `
 
 // PreflightScript checks kernel features dockerd needs.
+// NOTE: iptables is NOT checked here — minimal rootfs has no iptables binary
+// yet (it arrives as a docker-ce dependency). iptables is verified in
+// TestDaemon after install.
 const PreflightScript = `set -eu
 grep -q overlay /proc/filesystems || { echo "missing overlayfs"; exit 1; }
-iptables -L -n >/dev/null 2>&1 || { echo "iptables unavailable"; exit 1; }
 echo ok
 `
 
 // Install runs the apt flow with retries.
 func Install(distro string) error {
-	if _, err := wsl.ExecScript(distro, 60*time.Second, PreflightScript); err != nil {
-		return fmt.Errorf("kernel preflight: %w", err)
+	out, err := wsl.ExecScript(distro, 60*time.Second, PreflightScript)
+	if err != nil {
+		return fmt.Errorf("kernel preflight: %w (out: %s)", err, wsl.Tail(out, 1000))
 	}
 	_, err := wsl.RunRetry(distro, "install docker", 10*time.Minute, 3, InstallScript)
 	return err

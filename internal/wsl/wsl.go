@@ -150,7 +150,8 @@ func ExecScript(distro string, timeout time.Duration, script string) ([]byte, er
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return stdout.Bytes(), fmt.Errorf("wsl -d %s script: %w\n%s", distro, err, Tail(stderr.Bytes(), 2000))
+		return stdout.Bytes(), fmt.Errorf("wsl -d %s script: %w\nstdout: %s\nstderr: %s",
+			distro, err, Tail(stdout.Bytes(), 2000), Tail(stderr.Bytes(), 2000))
 	}
 	return stdout.Bytes(), nil
 }
