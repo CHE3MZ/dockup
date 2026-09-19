@@ -123,7 +123,19 @@ jobs:
           $ps = (.\dockup.exe ps) -join "`n"
           if ($ps -notmatch '\boff\b') { throw "ps missing off: $ps" }
       - name: docker version via pipe
-        run: docker -H npipe:////./pipe/dockup_engine version
+        run: |
+          $H = 'npipe:////./pipe/dockup_engine'
+          docker -H $H version
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output 'WARNING: first version attempt failed, dumping forensics and retrying once'
+            Get-Content "$env:APPDATA\dockup\logs\dockup.log" -Tail 20 -ErrorAction Continue
+            wsl -d dockup -u root -- systemctl status docker.service --no-pager
+            wsl -d dockup -u root -- journalctl -u docker.service --no-pager -n 30
+            wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+            docker -H $H version
+            if ($LASTEXITCODE -ne 0) { throw 'version via pipe failed twice' }
+          }
+          exit 0
       - name: hello-world via pipe
         timeout-minutes: 5
         run: docker -H npipe:////./pipe/dockup_engine run --rm hello-world
