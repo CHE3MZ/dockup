@@ -99,6 +99,12 @@ func Run(arch string) int {
 		logx.Err("mkdir wsl dir: %v", err)
 		return 1
 	}
+	if st, err := os.Stat(dest); err == nil {
+		logx.Info("downloaded %s (%d MB) -> %s", config.ArchTarName(arch), st.Size()/(1024*1024), dest)
+	} else {
+		logx.Err("download missing at %s: %v", dest, err)
+		return 1
+	}
 	if err := wsl.Import(config.DistroName, config.WslInstallDir(), dest); err != nil {
 		logx.Err("import failed: %v", err)
 		return 1

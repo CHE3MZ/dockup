@@ -14,6 +14,14 @@ import (
 	"unicode/utf16"
 )
 
+func statFile(path string) (int64, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	return st.Size(), nil
+}
+
 // ParseListOutput decodes `wsl --list --quiet` output into distro names.
 func ParseListOutput(data []byte) []string {
 	text := DecodeWslOutput(data)
@@ -163,14 +171,25 @@ func RunRetry(distro, what string, timeout time.Duration, tries int, script stri
 }
 
 // Import runs `wsl --import <distro> <dir> <tar> --version 2`.
+// Captures both stdout and stderr so GH logs show why imports fail
+// (wsl prints progress/errors on stdout, not stderr).
 func Import(distro, dir, tar string) error {
+	fi, statErr := statFile(tar)
+	if statErr != nil {
+		return fmt.Errorf("wsl --import: tar not accessible %q: %w", tar, statErr)
+	}
+	if fi < 50<<20 {
+		return fmt.Errorf("wsl --import: tar %q suspiciously small (%d bytes), re-download", tar, fi)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "wsl.exe", "--import", distro, dir, tar, "--version", "2")
-	var stderr bytes.Buffer
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("wsl --import: %w\n%s", err, Tail(stderr.Bytes(), 2000))
+		return fmt.Errorf("wsl --import %q (%d bytes) into %q: %w\nstdout: %s\nstderr: %s",
+			tar, fi, dir, err, Tail(stdout.Bytes(), 3000), Tail(stderr.Bytes(), 3000))
 	}
 	return nil
 }
