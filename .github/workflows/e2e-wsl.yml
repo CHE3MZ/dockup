@@ -129,6 +129,7 @@ jobs:
 
       - name: Foreground run serves, external shutdown tears down
         timeout-minutes: 8
+        run: |
           $env:DOCKUP_DEBUG = '1'
           $proc = Start-Process -FilePath "$PWD\dockup.exe" -ArgumentList @('-d','Debian') -NoNewWindow -PassThru -RedirectStandardOutput 'fg.out.log' -RedirectStandardError 'fg.err.log'
           $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
