@@ -585,16 +585,18 @@ no import, no unregister).
   engine/plugin packages + unit restarts + `TestDaemon`) and `dockup
   doctor --fix` share the same idempotent scripts as setup.
 
-### 10.9 Bridge I/O coverage + known stdin-EOF limitation
+### 10.9 Bridge I/O coverage + stdin-EOF fix (done)
 
-`full-test.yml` now covers: piped stdin bytes (`run -i ... read`),
+`full-test.yml` covers: piped stdin bytes (`run -i ... read`), stdin EOF
+to a blocking `cat` (`probe-eof` echoed, `MARKER` printed, clean exit),
 pseudo-TTY (`run -t`), `exec` ± stdin, `logs -f`, `compose up/down`,
 foreground serve, `daemon log` follow, and live `starting...`.
-Known limitation (proven by a non-failing probe step): a container that
-blocks waiting for stdin EOF (e.g. bare `cat` with piped stdin) hangs,
-because the byte-mode named-pipe bridge has no half-close propagation
-(TCP gets this for free). Fixing it means message-mode pipe +
-CloseWrite propagation — real Docker Desktop parity work, tracked as
-future work, not a regression: output without `-i` (the revision's
-requirement) is unaffected.
+
+The byte-mode pipe had no half-close, so a container blocked on stdin EOF
+hung forever. Fixed in `relay`: the listener now uses
+`winio.PipeConfig{MessageMode: true}` (client stdin CloseWrite arrives as
+server-side EOF — proven by `TestMessageModeCloseWriteEOF`), and teardown
+half-closes socat stdin on EOF, giving the container a 60s grace period to
+flush and exit instead of killing the bridge instantly. All prior flows
+stay green, so there was no regression.
 
