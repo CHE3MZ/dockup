@@ -585,6 +585,25 @@ no import, no unregister).
   engine/plugin packages + unit restarts + `TestDaemon`) and `dockup
   doctor --fix` share the same idempotent scripts as setup.
 
+### 10.10 Reliability hardening + remaining polish
+
+- `config.Version` is a stamped var (`-ldflags -X ...Version=$(git
+  rev-parse --short HEAD)` in all five workflows); `full-test` asserts
+  the 7-hex output. Local builds still report `dev`.
+- `setup --dry-run` now HEAD-probes both URLs and prints sizes, so
+  `--arm --dry-run` validates the arm64 payload URL without downloading.
+- `full-test` additionally covers: second `daemon start` refusal,
+  `daemon start` refusal while the foreground holds the pipe, uninstall
+  abort (`n` keeps the distro), corrupt-config tolerance, `doctor --fix`
+  on a healthy engine, and a 20× sequential `version` stress loop that
+  characterizes bridge-spawn reliability (the UTF-16 ghost hunt).
+- Fixed the `confiure` typo in `revision.md` + setup banner; wrote a
+  real `README.md` (was a 3-line stub).
+- Still open (no cheap CI path): graceful-SIGINT foreground teardown
+  (kill path is tested; Windows can't easily SIGINT another process),
+  `--arm` install (no arm64 runners), cross-run provenance diffing
+  (artifacts exist; comparison stays manual).
+
 ### 10.9 Bridge I/O coverage + stdin-EOF fix (done)
 
 `full-test.yml` covers: piped stdin bytes (`run -i ... read`), stdin EOF

@@ -12,7 +12,7 @@ jobs:
         with:
           go-version: '1.24'
       - name: build
-        run: go build -o dockup.exe ./cmd/dockup
+        run: go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
       - name: setup dockup (custom path)
         run: echo y | .\dockup.exe setup --amd --path="C:\dockup-inspect-wsl"
       - name: diagnose setup failure

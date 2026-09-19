@@ -29,7 +29,7 @@ dockup re-install a new dockup instance on WSL ? [y/n]
 ## else
 
 Setting up dockup :
-    dockup will install and confiure a new instance on WSL under the name "dockup"
+    dockup will install and configure a new instance on WSL under the name "dockup"
     proceed ? [y/n]
 
     >> y

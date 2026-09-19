@@ -23,11 +23,14 @@ const (
 	// official Debian root filesystems (same bookworm content) and import cleanly.
 	RootfsBase = "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts"
 
-	// Version is overridden at build time via -ldflags -X.
-	Version = "dev"
-
 	// MaxLogBytes caps the daemon log before rotation.
 	MaxLogBytes = 5 << 20 // 5 MB
+)
+
+var (
+	// Version is stamped at build time via -ldflags -X (commit SHA).
+	// Local builds without flags report "dev".
+	Version = "dev"
 )
 
 // DistBranch maps amd64/arm64 to debuerreotype branch names.

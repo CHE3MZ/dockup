@@ -99,7 +99,7 @@ func RunEx(o Options) int {
 			return nil
 		})
 	} else {
-		fmt.Printf("Setting up dockup :\n    dockup will install and confiure a new instance on WSL under the name \"dockup\"\n    proceed ? [y/n]\n")
+		fmt.Printf("Setting up dockup :\n    dockup will install and configure a new instance on WSL under the name \"dockup\"\n    proceed ? [y/n]\n")
 		r := bufio.NewReader(os.Stdin)
 		line, _ := r.ReadString('\n')
 		line = strings.ToLower(strings.TrimSpace(line))
@@ -244,8 +244,8 @@ func dryRunPlan(arch string, cfg userconfig.Config, installDir string) int {
 	ui.Printf("arch: %s", arch)
 	ui.Printf("distro name: %s", config.DistroName)
 	ui.Printf("install dir: %s", installDir)
-	ui.Printf("download: %s", config.RootfsURL(arch))
-	ui.Printf("fallback: %s", config.RootfsFallbackURL(arch))
+	ui.Printf("download: %s (%s)", config.RootfsURL(arch), sizeOf(config.RootfsURL(arch)))
+	ui.Printf("fallback: %s (%s)", config.RootfsFallbackURL(arch), sizeOf(config.RootfsFallbackURL(arch)))
 	ui.Printf("config: %s", userconfig.File())
 	ui.Printf("pipe: %s", cfg.EffectivePipe())
 	if cfg.UseTCP {
@@ -255,6 +255,14 @@ func dryRunPlan(arch string, cfg userconfig.Config, installDir string) int {
 	}
 	ui.Hint("dry run complete — nothing was downloaded, imported, or changed.")
 	return 0
+}
+
+// sizeOf reports a URL's download size for dry-run display.
+func sizeOf(url string) string {
+	if n := download.Size(url); n >= 0 {
+		return download.FormatMB(n) + " MB"
+	}
+	return "size unknown"
 }
 
 // currentInstallDir returns where the distro lives: stored current_path,

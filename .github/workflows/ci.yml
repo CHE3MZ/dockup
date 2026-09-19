@@ -16,6 +16,6 @@ jobs:
       - name: test
         run: go test ./...
       - name: build
-        run: go build -o dockup.exe ./cmd/dockup
+        run: go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
       - name: smoke version
         run: .\dockup.exe version

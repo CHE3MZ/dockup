@@ -16,7 +16,12 @@ jobs:
       - name: unit tests
         run: go test ./...
       - name: build
-        run: go build -o dockup.exe ./cmd/dockup
+        run: go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
+      - name: version is stamped with commit
+        run: |
+          $o = .\dockup.exe version
+          if ($o -notmatch '[0-9a-f]{7}') { throw "unstamped version: $o" }
+          exit 0
       - name: help for every command
         run: |
           .\dockup.exe --help
@@ -36,6 +41,13 @@ jobs:
           echo y | .\dockup.exe setup --dry-run
           $list = wsl --list --quiet
           if ($list -match 'dockup') { throw 'dry-run created a distro' }
+      - name: arm dry-run shows arm urls
+        run: |
+          $o = (echo y | .\dockup.exe setup --arm --dry-run) -join "`n"
+          if ($o -notmatch 'dist-arm64v8') { throw "no arm urls: $o" }
+          $list = wsl --list --quiet
+          if ($list -match 'dockup') { throw 'dry-run created a distro' }
+          exit 0
       - name: config file created with bare minimum
         run: |
           .\dockup.exe version
@@ -46,6 +58,15 @@ jobs:
           if ($c.port -ne 2375) { throw "port = $($c.port)" }
           if ($c.use_tcp -ne $false) { throw 'use_tcp should default false' }
           if (!$c.pipe_name) { throw 'pipe_name missing' }
+      - name: corrupt config is tolerated
+        run: |
+          $p = "$env:USERPROFILE\.dockup\config.json"
+          Copy-Item $p "$p.bak"
+          '{corrupt' | Set-Content $p -NoNewline
+          .\dockup.exe version
+          if ($LASTEXITCODE -ne 0) { throw 'should tolerate corrupt config' }
+          Move-Item "$p.bak" $p -Force
+          exit 0
       - name: setup with custom path
         run: echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
       - name: config paths follow custom install
@@ -62,10 +83,18 @@ jobs:
           Get-ChildItem C:\dockup-fulltest-wsl -Recurse -ErrorAction Continue | Select-Object FullName, Length
       - name: doctor after setup
         run: .\dockup.exe doctor
+      - name: doctor --fix on healthy engine
+        timeout-minutes: 10
+        run: .\dockup.exe doctor --fix
       - name: daemon start
         run: .\dockup.exe daemon start
       - name: daemon status
         run: .\dockup.exe daemon status
+      - name: second daemon start refuses
+        run: |
+          .\dockup.exe daemon start
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
+          exit 0
       - name: daemon log follows and exits on kill
         run: |
           $tail = "logtail.txt"
@@ -219,6 +248,14 @@ jobs:
           $c | ConvertTo-Json | Set-Content $p
           .\dockup.exe daemon restart
           .\dockup.exe daemon status
+      - name: bridge stress (20 sequential versions)
+        run: |
+          $H = 'npipe:////./pipe/dockup_engine'
+          for ($i = 1; $i -le 20; $i++) {
+            docker -H $H version | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "attempt $i failed" }
+          }
+          exit 0
       - name: upgrade engine to latest
         timeout-minutes: 10
         run: |
@@ -240,6 +277,8 @@ jobs:
             if (!$up) { throw "foreground did not come up: $ps" }
             docker -H npipe:////./pipe/dockup_engine version | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'version via foreground failed' }
+            .\dockup.exe daemon start
+            if ($LASTEXITCODE -ne 1) { throw "daemon start while foreground up should refuse, got $LASTEXITCODE" }
           } finally {
             Stop-Process -Id $p.Id -Force -ErrorAction Continue
           }
@@ -253,6 +292,13 @@ jobs:
           exit 0
       - name: shutdown
         run: .\dockup.exe shutdown
+      - name: uninstall aborts on n
+        run: |
+          echo n | .\dockup.exe uninstall
+          if ($LASTEXITCODE -ne 0) { throw 'abort should exit 0' }
+          $list = (wsl --list --quiet) -join "`n"
+          if ($list -notmatch 'dockup') { throw 'distro should still be present' }
+          exit 0
       - name: uninstall keeps default path
         run: |
           echo y | .\dockup.exe uninstall
