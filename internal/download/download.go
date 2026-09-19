@@ -23,7 +23,7 @@ func Size(url string) int64 {
 	if err != nil {
 		return -1
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.ContentLength
 }
 
@@ -38,7 +38,7 @@ func Fetch(url, dest string, onProgress Progress) error {
 	if err != nil {
 		return fmt.Errorf("download %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("download %s: HTTP %s", url, resp.Status)
 	}
@@ -47,7 +47,7 @@ func Fetch(url, dest string, onProgress Progress) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var done int64
 	tick := time.NewTicker(500 * time.Millisecond)
 	defer tick.Stop()

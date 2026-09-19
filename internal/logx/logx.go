@@ -42,7 +42,7 @@ func Append(msg string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, _ = f.WriteString(msg + "\n")
 }
 

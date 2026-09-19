@@ -29,7 +29,7 @@ func processAlive(pid int) bool {
 	if err != nil {
 		return false
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	var code uint32
 	if err := windows.GetExitCodeProcess(h, &code); err != nil {
 		return false
@@ -69,7 +69,7 @@ func Start() error {
 		if err != nil {
 			return err
 		}
-		defer logf.Close()
+		defer func() { _ = logf.Close() }()
 		cmd := exec.Command(exe, "__serve")
 		cmd.Stdout = logf
 		cmd.Stderr = logf

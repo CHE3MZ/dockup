@@ -81,7 +81,7 @@ func RunEx(o Options) int {
 	}
 	// Already installed?
 	if wsl.Exists(config.DistroName) {
-		fmt.Printf("%s\n", ui.Yellow(fmt.Sprintf("Warning : An installation of dockup already exists on WSL, do you wish to delete that installation and let dockup re-install a new dockup instance on WSL ? [y/n]")))
+		fmt.Printf("%s\n", ui.Yellow("Warning : An installation of dockup already exists on WSL, do you wish to delete that installation and let dockup re-install a new dockup instance on WSL ? [y/n]"))
 		r := bufio.NewReader(os.Stdin)
 		line, _ := r.ReadString('\n')
 		line = strings.ToLower(strings.TrimSpace(line))

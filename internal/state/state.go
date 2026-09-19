@@ -73,7 +73,7 @@ func WithLock(fn func(s *State) error) error {
 	for {
 		f, err := os.OpenFile(config.LockFile(), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 		if err == nil {
-			_, _ = f.WriteString(fmt.Sprint(os.Getpid()))
+			_, _ = fmt.Fprint(f, os.Getpid())
 			_ = f.Close()
 			break
 		}
@@ -87,7 +87,7 @@ func WithLock(fn func(s *State) error) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	defer os.Remove(config.LockFile())
+	defer func() { _ = os.Remove(config.LockFile()) }()
 	s, err := Load()
 	if err != nil {
 		return err

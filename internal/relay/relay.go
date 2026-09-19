@@ -71,7 +71,7 @@ func EngineReady(pipe string) bool {
 	if err != nil {
 		return false
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	_ = c.SetDeadline(time.Now().Add(timeout))
 	if _, err := c.Write([]byte("GET /_ping HTTP/1.0\r\nHost: localhost\r\n\r\n")); err != nil {
 		return false
@@ -155,13 +155,13 @@ func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) er
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", pipe, err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		l.Close()
+		_ = l.Close()
 	}()
 
 	if useTCP {
@@ -170,10 +170,10 @@ func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) er
 		if err != nil {
 			return fmt.Errorf("listen %s: %w", addr, err)
 		}
-		defer tl.Close()
+		defer func() { _ = tl.Close() }()
 		go func() {
 			<-ctx.Done()
-			tl.Close()
+			_ = tl.Close()
 		}()
 		go func() {
 			for {
@@ -214,7 +214,7 @@ func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) er
 }
 
 func bridgeConn(client net.Conn, distro string) {
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--",
 		"socat", "STDIO", "UNIX-CONNECT:/var/run/docker.sock")
 	toProc, err := cmd.StdinPipe()

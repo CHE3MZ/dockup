@@ -53,8 +53,8 @@ func Render(status string, autostartOn bool) string {
 	b.WriteString(ui.Bold(fmt.Sprintf("%-*s", w1, h1)))
 	b.WriteString(ui.Bold(fmt.Sprintf("%-*s", w2, h2)))
 	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("%-*s", w1, status))
-	b.WriteString(fmt.Sprintf("%-*s", w2, v2))
+	_, _ = fmt.Fprintf(&b, "%-*s", w1, status)
+	_, _ = fmt.Fprintf(&b, "%-*s", w2, v2)
 	return b.String()
 }
 
