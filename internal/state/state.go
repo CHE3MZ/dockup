@@ -26,7 +26,6 @@ type DaemonInfo struct {
 
 // DistroState is per-distro inventory + runtime hints.
 type DistroState struct {
-	RelayPort         int               `json:"relayPort"`
 	WSLWasRunning     bool              `json:"wslWasRunning"`
 	BootedByDockup    bool              `json:"bootedByDockup"`
 	InstalledByDockup InstalledByDockup `json:"installedByDockup"`

@@ -61,9 +61,6 @@ func Run() error {
 			ver, verr := serverVersion()
 			check("engine via relay", verr == nil, firstNonEmpty("("+ver+")", "docker version failed"))
 		}
-		if d, ok := s.Distros[s.ActiveDistro]; ok && d.RelayPort != 0 {
-			info("relay port:", fmt.Sprintf("127.0.0.1:%d", d.RelayPort))
-		}
 	}
 
 	// Kernel preflight per configured distro (catches custom-kernel issues

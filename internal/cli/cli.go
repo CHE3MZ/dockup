@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -28,12 +27,12 @@ import (
 
 // Run dispatches. Returns process exit code.
 func Run(args []string, version, commit string) int {
-	// Global flags: -d|--distro <name>, --port <n>.
-	distroFlag, portFlag, rest := parseGlobals(args)
+	// Global flag: -d|--distro <name>.
+	distroFlag, rest := parseGlobals(args)
 
 	if len(rest) == 0 {
 		// Bare foreground run.
-		return bareRun(distroFlag, portFlag)
+		return bareRun(distroFlag)
 	}
 
 	switch rest[0] {
@@ -69,14 +68,14 @@ func Run(args []string, version, commit string) int {
 		return cmdDaemon(distroFlag, rest[1:])
 	case "__serve":
 		// Hidden: relay holder spawned by `daemon start`. Not for humans.
-		return cmdServeInner(distroFlag, portFlag)
+		return cmdServeInner(distroFlag)
 	default:
 		fmt.Fprintf(os.Stderr, "dockup: unknown command %q (try --help)\n", rest[0])
 		return 1
 	}
 }
 
-func parseGlobals(args []string) (distro string, port int, rest []string) {
+func parseGlobals(args []string) (distro string, rest []string) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
@@ -87,25 +86,18 @@ func parseGlobals(args []string) (distro string, port int, rest []string) {
 			}
 		case strings.HasPrefix(a, "--distro="):
 			distro = strings.TrimPrefix(a, "--distro=")
-		case a == "--port":
-			if i+1 < len(args) {
-				port, _ = strconv.Atoi(args[i+1])
-				i++
-			}
-		case strings.HasPrefix(a, "--port="):
-			port, _ = strconv.Atoi(strings.TrimPrefix(a, "--port="))
 		default:
 			rest = append(rest, a)
 		}
 	}
-	return distro, port, rest
+	return distro, rest
 }
 
 func usage() {
 	fmt.Print(`dockup — manual Docker Engine in your own WSL2 distro (Windows only)
 
 Usage:
-  dockup [-d|--distro NAME] [--port N]     foreground run (single-active)
+  dockup [-d|--distro NAME]     foreground run (single-active)
   dockup setup [NAME]        install engine in distro
   dockup revert [NAME]       remove what setup added (confirm, no CLI needed)
   dockup default [NAME]      set/show default distro
@@ -148,7 +140,7 @@ func resolveDistro(flag string) (string, *state.State, error) {
 }
 
 // teardownDistro stops dockup-managed processes and, ONLY if dockup booted
-// the distro, terminates it. Clears active/port/daemon bookkeeping.
+// the distro, terminates it. Clears active/daemon bookkeeping.
 // Best-effort: never fails, so teardown always converges.
 func teardownDistro(s *state.State, name string) {
 	d, ok := s.Distros[name]
@@ -160,7 +152,6 @@ func teardownDistro(s *state.State, name string) {
 	if d.BootedByDockup {
 		_ = wsl.Terminate(name)
 	}
-	d.RelayPort = 0
 	d.WSLWasRunning = false
 	d.BootedByDockup = false
 	d.Daemon = state.DaemonInfo{}
@@ -180,19 +171,16 @@ func cmdList() int {
 		fmt.Println("(no configured distros — run: dockup setup)")
 		return 0
 	}
-	fmt.Printf("%-24s %-8s %-8s %-6s\n", "NAME", "DEFAULT", "ACTIVE", "PORT")
-	for name, d := range s.Distros {
-		def, act, port := "", "", ""
+	fmt.Printf("%-24s %-8s %-8s\n", "NAME", "DEFAULT", "ACTIVE")
+	for name := range s.Distros {
+		def, act := "", ""
 		if name == s.Default {
 			def = "*"
 		}
 		if name == s.ActiveDistro {
 			act = "yes"
-			if d.RelayPort != 0 {
-				port = strconv.Itoa(d.RelayPort)
-			}
 		}
-		fmt.Printf("%-24s %-8s %-8s %-6s\n", name, def, act, port)
+		fmt.Printf("%-24s %-8s %-8s\n", name, def, act)
 	}
 	return 0
 }
@@ -280,18 +268,18 @@ func cmdPs() int {
 		return 0
 	}
 	d, ok := s.Distros[s.ActiveDistro]
-	if !ok || d.RelayPort == 0 {
+	if !ok {
 		fmt.Printf("%-24s %s\n", s.ActiveDistro, "stopped (stale state, run dockup cleanup)")
 		return 0
 	}
-	relayUp := engine.Healthy(d.RelayPort)
+	relayUp := relay.Alive()
 	sockUp := engine.SocketAlive(s.ActiveDistro)
 	var status string
 	switch {
 	case relayUp && sockUp:
-		status = fmt.Sprintf("running (port %d, pid %d, since %s)", d.RelayPort, d.Daemon.PID, d.Daemon.StartedAt)
+		status = fmt.Sprintf("running (pid %d, since %s)", d.Daemon.PID, d.Daemon.StartedAt)
 	case relayUp:
-		status = fmt.Sprintf("degraded (relay up on %d, engine not responding)", d.RelayPort)
+		status = "degraded (relay up, engine not responding)"
 	default:
 		status = "stopped (relay down, run dockup cleanup)"
 	}
@@ -501,12 +489,12 @@ func cmdCleanup() int {
 				s.Default = ""
 			}
 		}
-		for name, d := range s.Distros {
+		for name := range s.Distros {
 			if name == s.ActiveDistro {
-				relayUp := d.RelayPort != 0 && engine.Healthy(d.RelayPort)
+				relayUp := relay.Alive()
 				sockUp := relayUp && engine.SocketAlive(name)
 				switch {
-				case d.RelayPort != 0 && relayUp && sockUp:
+				case relayUp && sockUp:
 					fmt.Printf("cleanup: %q healthy, nothing to do\n", name)
 				case relayUp:
 					fmt.Printf("cleanup: %q NEEDS ATTENTION (relay up, engine not responding)\n", name)
@@ -592,7 +580,7 @@ func cmdDaemon(globalDistro string, args []string) int {
 			fmt.Fprintln(os.Stderr, "dockup:", err)
 			return 1
 		}
-		return daemonStart(name, parsePortArg(args[1:]))
+		return daemonStart(name)
 	case "stop":
 		name, err := activeOrFlag(globalDistro)
 		if err != nil {
@@ -607,7 +595,7 @@ func cmdDaemon(globalDistro string, args []string) int {
 			return 1
 		}
 		_ = daemonStop(name) // not running is fine; start fresh.
-		return daemonStart(name, parsePortArg(args[1:]))
+		return daemonStart(name)
 	case "status":
 		name := globalDistro
 		if name == "" {
@@ -640,24 +628,7 @@ func activeOrFlag(flag string) (string, error) {
 	return s.ActiveDistro, nil
 }
 
-// parsePortArg picks up an inline --port N after the daemon subcommand.
-func parsePortArg(args []string) int {
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--port" && i+1 < len(args) {
-			if p, err := strconv.Atoi(args[i+1]); err == nil {
-				return p
-			}
-		}
-		if strings.HasPrefix(args[i], "--port=") {
-			if p, err := strconv.Atoi(strings.TrimPrefix(args[i], "--port=")); err == nil {
-				return p
-			}
-		}
-	}
-	return 0
-}
-
-func bareRun(distroFlag string, portFlag int) int {
+func bareRun(distroFlag string) int {
 	if !requireCLI(false) {
 		return 1
 	}
@@ -693,20 +664,14 @@ func bareRun(distroFlag string, portFlag int) int {
 		return 1
 	}
 
-	port, err := resolvePort(portFlag)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "dockup:", err)
-		return 1
-	}
-
-	wasRunning, err := prepareEngine(name, port)
+	wasRunning, err := prepareEngine(name)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		return 1
 	}
 	bootedByDockup := !wasRunning
 
-	if err := claimActive(name, port, wasRunning, os.Getpid(), "foreground"); err != nil {
+	if err := claimActive(name, wasRunning, os.Getpid(), "foreground"); err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		_ = engine.Stop(name)
 		if bootedByDockup {
@@ -717,7 +682,7 @@ func bareRun(distroFlag string, portFlag int) int {
 
 	fmt.Printf("up: %q on npipe:////./pipe/docker_engine (Ctrl-C to tear down)\n", name)
 	fmt.Println(`  $env:DOCKER_HOST='npipe:////./pipe/docker_engine'`)
-	_ = relay.Serve(ctx, port) // returns on Ctrl-C
+	_ = relay.Serve(ctx, name) // returns on Ctrl-C
 
 	if err := state.Transaction(func(s *state.State) error {
 		teardownDistro(s, name)
@@ -734,28 +699,17 @@ func bareRun(distroFlag string, portFlag int) int {
 	return 0
 }
 
-// resolvePort validates --port or picks a free 127.0.0.1 port.
-func resolvePort(flag int) (int, error) {
-	if flag != 0 {
-		if flag < 1 || flag > 65535 {
-			return 0, fmt.Errorf("bad --port (1-65535)")
-		}
-		return flag, nil
-	}
-	return engine.PickFreePort()
-}
-
-// prepareEngine starts containerd->dockerd->socat and waits until the socket
-// and relay answer. Returns wasRunning (distro already up before us).
+// prepareEngine starts containerd->dockerd and waits until the socket
+// answers. Returns wasRunning (distro already up before us).
 // On failure it stops what it started and terminates only a distro it booted.
-func prepareEngine(name string, port int) (wasRunning bool, err error) {
+func prepareEngine(name string) (wasRunning bool, err error) {
 	running, err := wsl.Running()
 	if err != nil {
 		return false, err
 	}
 	wasRunning = running[name]
 	booted := !wasRunning
-	fmt.Printf("starting engine in %q (relay 127.0.0.1:%d)...\n", name, port)
+	fmt.Printf("starting engine in %q...\n", name)
 	fail := func(e error) (bool, error) {
 		_ = engine.Stop(name)
 		if booted {
@@ -763,27 +717,23 @@ func prepareEngine(name string, port int) (wasRunning bool, err error) {
 		}
 		return false, e
 	}
-	if err := engine.Start(name, port); err != nil {
+	if err := engine.Start(name); err != nil {
 		return fail(err)
 	}
 	if err := engine.WaitSocket(name, 2*time.Minute); err != nil {
-		return fail(err)
-	}
-	if err := engine.WaitRelay(port, 30*time.Second); err != nil {
 		return fail(err)
 	}
 	return wasRunning, nil
 }
 
 // claimActive records the single active set under the state lock.
-func claimActive(name string, port int, wasRunning bool, pid int, mode string) error {
+func claimActive(name string, wasRunning bool, pid int, mode string) error {
 	startedAt := time.Now().UTC().Format(time.RFC3339)
 	return state.Transaction(func(s *state.State) error {
 		if s.ActiveDistro != "" && s.ActiveDistro != name {
 			return fmt.Errorf("%q became active while starting — aborting", s.ActiveDistro)
 		}
 		d := s.Distros[name]
-		d.RelayPort = port
 		d.WSLWasRunning = wasRunning
 		d.BootedByDockup = !wasRunning
 		d.Daemon = state.DaemonInfo{PID: pid, StartedAt: startedAt, Mode: mode}
@@ -806,7 +756,7 @@ func stopOwnerPID(pid int) {
 
 // daemonStart boots the engine, then re-launches this same binary headless
 // (__serve) to hold the pipe. No second binary.
-func daemonStart(name string, portFlag int) int {
+func daemonStart(name string) int {
 	s, err := state.Load()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
@@ -829,12 +779,7 @@ func daemonStart(name string, portFlag int) int {
 		fmt.Fprintln(os.Stderr, "dockup: stop it first, or run `dockup cleanup` if it is a stale dockup relay.")
 		return 1
 	}
-	port, err := resolvePort(portFlag)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "dockup:", err)
-		return 1
-	}
-	wasRunning, err := prepareEngine(name, port)
+	wasRunning, err := prepareEngine(name)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		return 1
@@ -864,7 +809,7 @@ func daemonStart(name string, portFlag int) int {
 		return 1
 	}
 	defer lf.Close()
-	child := exec.Command(exe, "__serve", "-d", name, "--port", strconv.Itoa(port))
+	child := exec.Command(exe, "__serve", "-d", name)
 	child.Stdout = lf
 	child.Stderr = lf
 	child.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
@@ -879,7 +824,7 @@ func daemonStart(name string, portFlag int) int {
 	childPID := child.Process.Pid
 	// Detach: never Wait on the daemon child.
 
-	if err := claimActive(name, port, wasRunning, childPID, "daemon"); err != nil {
+	if err := claimActive(name, wasRunning, childPID, "daemon"); err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		_ = child.Process.Kill()
 		_ = engine.Stop(name)
@@ -902,7 +847,7 @@ func daemonStart(name string, portFlag int) int {
 		})
 		return 1
 	}
-	fmt.Printf("daemon up: %q (pid %d, relay 127.0.0.1:%d, log %s)\n", name, childPID, port, logPath)
+	fmt.Printf("daemon up: %q (pid %d, log %s)\n", name, childPID, logPath)
 	return 0
 }
 
@@ -943,11 +888,11 @@ func daemonStatus(name string) int {
 		fmt.Fprintf(os.Stderr, "dockup: distro %q is not configured\n", name)
 		return 1
 	}
-	if s.ActiveDistro != name || d.RelayPort == 0 {
+	if s.ActiveDistro != name {
 		fmt.Printf("%-24s stopped\n", name)
 		return 0
 	}
-	relayUp := engine.Healthy(d.RelayPort)
+	relayUp := relay.Alive()
 	sockUp := engine.SocketAlive(name)
 	mode := d.Daemon.Mode
 	if mode == "" {
@@ -955,8 +900,8 @@ func daemonStatus(name string) int {
 	}
 	switch {
 	case relayUp && sockUp:
-		fmt.Printf("%-24s running (%s, pid %d, since %s, port %d)\n",
-			name, mode, d.Daemon.PID, d.Daemon.StartedAt, d.RelayPort)
+		fmt.Printf("%-24s running (%s, pid %d, since %s)\n",
+			name, mode, d.Daemon.PID, d.Daemon.StartedAt)
 	default:
 		fmt.Printf("%-24s stopped%s\n", name, stoppedReason(relayUp, sockUp))
 	}
@@ -972,8 +917,8 @@ func stoppedReason(relayUp, sockUp bool) string {
 
 // cmdServeInner is the hidden relay holder spawned by `daemon start`.
 // It serves the pipe until killed; teardown belongs to the stopper.
-func cmdServeInner(distroFlag string, portFlag int) int {
-	if distroFlag == "" || portFlag == 0 {
+func cmdServeInner(distroFlag string) int {
+	if distroFlag == "" {
 		fmt.Fprintln(os.Stderr, "dockup: __serve is internal (spawned by daemon start)")
 		return 1
 	}
@@ -982,13 +927,13 @@ func cmdServeInner(distroFlag string, portFlag int) int {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		return 1
 	}
-	if s.ActiveDistro != distroFlag || s.Distros[distroFlag].RelayPort != portFlag {
+	if s.ActiveDistro != distroFlag {
 		fmt.Fprintln(os.Stderr, "dockup: __serve state mismatch (stale spawn, exiting)")
 		return 1
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := relay.Serve(ctx, portFlag); err != nil {
+	if err := relay.Serve(ctx, distroFlag); err != nil {
 		fmt.Fprintln(os.Stderr, "dockup:", err)
 		return 1
 	}

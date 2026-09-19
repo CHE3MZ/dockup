@@ -1,28 +1,19 @@
-// Package engine starts/stops containerd -> dockerd -> socat inside WSL.
-// All commands run as root via `wsl -d <distro> -u root` with nohup/setsid.
+// Package engine starts/stops containerd -> dockerd inside WSL.
+// All commands run as root via stdin scripts with nohup/setsid.
+// (Client traffic reaches dockerd via per-connection `socat STDIO` bridges
+// spawned by the relay — no persistent TCP listener in-distro.)
 package engine
 
 import (
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
-// PickFreePort returns a free 127.0.0.1 TCP port for the relay.
-func PickFreePort() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
-}
-
-// Start launches containerd, dockerd, then socat binding 127.0.0.1:port.
+// Start launches containerd, then dockerd on its unix socket.
 // Scripts go via stdin (ExecScript): redirections must arrive verbatim.
-func Start(distro string, port int) error {
+func Start(distro string) error {
 	// containerd first.
 	if _, err := wsl.ExecScript(distro, 30*time.Second,
 		"setsid nohup containerd >/var/log/dockup-containerd.log 2>&1 < /dev/null &"); err != nil {
@@ -33,44 +24,18 @@ func Start(distro string, port int) error {
 		"setsid nohup dockerd -H unix:///var/run/docker.sock >/var/log/dockup-dockerd.log 2>&1 < /dev/null &"); err != nil {
 		return fmt.Errorf("start dockerd: %v", err)
 	}
-	// socat bridges 127.0.0.1:port -> unix socket. NEVER 0.0.0.0.
-	cmd := fmt.Sprintf("setsid nohup socat TCP-LISTEN:%d,bind=127.0.0.1,fork,reuseaddr UNIX-CONNECT:/var/run/docker.sock >/var/log/dockup-socat.log 2>&1 < /dev/null &", port)
-	if _, err := wsl.ExecScript(distro, 15*time.Second, cmd); err != nil {
-		return fmt.Errorf("start socat: %v", err)
-	}
 	return nil
 }
 
-// Stop kills only dockup-started processes by exact command-line match.
+// Stop kills only dockup-started processes by exact command-line match:
+// dockerd with our socket flag, bare containerd, and our STDIO bridge
+// socats. Never broad `killall docker`.
 func Stop(distro string) error {
-	// pkill -f with exact patterns; never broad `killall docker`.
-	patterns := []string{"socat TCP-LISTEN", "dockerd -H unix:///var/run/docker.sock", "containerd"}
+	patterns := []string{"socat STDIO UNIX-CONNECT", "dockerd -H unix:///var/run/docker.sock", "containerd"}
 	for _, p := range patterns {
 		_, _ = wsl.ExecScript(distro, 15*time.Second, "pkill -f '"+p+"'")
 	}
 	return nil
-}
-
-// Healthy dials 127.0.0.1:port (WSL localhost relay) with a short timeout.
-func Healthy(port int) bool {
-	c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 2*time.Second)
-	if err != nil {
-		return false
-	}
-	c.Close()
-	return true
-}
-
-// WaitRelay polls Healthy until timeout. Ensures socat is reachable from Windows.
-func WaitRelay(port int, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if Healthy(port) {
-			return nil
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return fmt.Errorf("relay 127.0.0.1:%d not reachable", port)
 }
 
 // SocketAlive checks /var/run/docker.sock exists and `docker version` answers

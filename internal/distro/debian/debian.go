@@ -142,6 +142,11 @@ apt-get install -y docker-ce docker-ce-cli containerd.io socat
 	if _, err := wsl.RunRetry(distro, "engine install", 10*time.Minute, 3, script); err != nil {
 		return snap, hadPrior, err
 	}
+	// Loud if apt claimed success but binaries are missing (never proceed blind).
+	if out, err := wsl.Exec(distro, 15*time.Second, "sh", "-c",
+		"command -v dockerd && command -v socat && command -v containerd"); err != nil || len(out) == 0 {
+		return snap, hadPrior, fmt.Errorf("engine install finished but binaries missing: %v", err)
+	}
 	return snap, hadPrior, nil
 }
 

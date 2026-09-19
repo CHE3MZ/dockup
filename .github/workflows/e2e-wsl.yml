@@ -163,6 +163,13 @@ jobs:
           $hw = docker run --rm hello-world
           if ($LASTEXITCODE -ne 0) { throw 'docker run failed' }
           if ($hw -notmatch 'Hello from Docker!') { throw 'hello-world did not run through our relay' }
+          # Multi-connection exercise (each docker call = fresh STDIO bridge).
+          docker run --name e2e-hw hello-world >$null
+          if ($LASTEXITCODE -ne 0) { throw 'named run failed' }
+          $lg = docker logs e2e-hw
+          if ($lg -notmatch 'Hello from Docker!') { throw "docker logs failed, got: $lg" }
+          docker rm e2e-hw >$null
+          if ($LASTEXITCODE -ne 0) { throw 'docker rm failed' }
 
       - name: docker compose plugin check
         run: |

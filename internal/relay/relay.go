@@ -1,6 +1,13 @@
-// Package relay serves \\.\pipe\docker_engine (go-winio) and proxies
-// raw bytes to 127.0.0.1:<port>. Raw byte-copy supports HTTP hijack
-// (run -it, logs -f, exec). Windows-only.
+// Package relay serves \\.\pipe\docker_engine (go-winio). Each accepted
+// client gets a private in-distro bridge:
+//
+//	wsl -d <distro> -u root -- socat STDIO UNIX-CONNECT:/var/run/docker.sock
+//
+// Raw byte-copy supports HTTP hijack (run -it, logs -f, exec). No TCP ports,
+// no port picking, no firewall questions: the design is immune to WSL
+// localhost-forwarding quirks (NAT vs mirrored mode) because nothing crosses
+// the Windows/WSL boundary over TCP. Cost: one short-lived wsl.exe per
+// connection (~0.2-0.5s), fine for a manual-use tool. Windows-only.
 package relay
 
 import (
@@ -8,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os/exec"
 	"time"
 
 	"github.com/Microsoft/go-winio"
@@ -15,8 +23,8 @@ import (
 
 const PipeName = `\\.\pipe\docker_engine`
 
-// Alive dials the pipe with a short timeout. True = relay already up
-// (double-start guard).
+// Alive dials the pipe with a short timeout. True = a relay already holds
+// the name (ours or foreign — callers must check state before attaching).
 func Alive() bool {
 	timeout := 2 * time.Second
 	c, err := winio.DialPipe(PipeName, &timeout)
@@ -27,13 +35,12 @@ func Alive() bool {
 	return true
 }
 
-// Serve blocks accepting pipe clients and proxying each to
-// 127.0.0.1:targetPort. Stops on ctx cancel. One goroutine per connection.
-func Serve(ctx context.Context, targetPort int) error {
-	if targetPort <= 0 || targetPort > 65535 {
-		return fmt.Errorf("bad target port %d", targetPort)
+// Serve blocks accepting pipe clients and bridging each into the distro.
+// Stops on ctx cancel. One goroutine (+ one wsl.exe) per connection.
+func Serve(ctx context.Context, distro string) error {
+	if distro == "" {
+		return fmt.Errorf("no distro")
 	}
-	target := fmt.Sprintf("127.0.0.1:%d", targetPort)
 	l, err := winio.ListenPipe(PipeName, nil)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", PipeName, err)
@@ -63,24 +70,35 @@ func Serve(ctx context.Context, targetPort int) error {
 				continue
 			}
 		}
-		go proxyConn(pc, target)
+		go bridgeConn(pc, distro)
 	}
 }
 
-func proxyConn(pipe net.Conn, target string) {
+// bridgeConn splices one pipe client to one `socat STDIO ...` process.
+// EOF on either side tears the whole bridge down; the process is reaped.
+func bridgeConn(pipe net.Conn, distro string) {
 	defer pipe.Close()
-	backend, err := net.DialTimeout("tcp", target, 5*time.Second)
+	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--",
+		"socat", "STDIO", "UNIX-CONNECT:/var/run/docker.sock")
+	toProc, err := cmd.StdinPipe()
 	if err != nil {
 		return
 	}
-	defer backend.Close()
-	// Raw copy both directions; hijacked streams stay open.
+	fromProc, err := cmd.StdoutPipe()
+	if err != nil {
+		return
+	}
+	cmd.Stderr = nil // socat chatter stays out of the API stream.
+	if err := cmd.Start(); err != nil {
+		return
+	}
+	done := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(backend, pipe)
-		// Half-close backend write side if supported.
-		if tc, ok := backend.(*net.TCPConn); ok {
-			_ = tc.CloseWrite()
-		}
+		defer close(done)
+		_, _ = io.Copy(toProc, pipe)
+		_ = toProc.Close() // EOF downstream so socat can exit.
 	}()
-	_, _ = io.Copy(pipe, backend)
+	_, _ = io.Copy(pipe, fromProc)
+	_ = cmd.Wait()
+	<-done
 }

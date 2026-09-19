@@ -39,27 +39,27 @@ Builds on other OSes are not supported and must fail fast in scripts/CI.
 ## 4. Architecture (runtime data path)
 Windows `docker.exe --host npipe:////./pipe/docker_engine`
   -> Named pipe `\\.\pipe\docker_engine` served by dockup itself (go-winio)
-    -> TCP dial to 127.0.0.1:<port> (WSL localhost relay, host-local ONLY)
-      -> `socat TCP-LISTEN:<port>,bind=127.0.0.1,fork,reuseaddr UNIX-CONNECT:/var/run/docker.sock` inside target distro
-        -> `dockerd -H unix:///var/run/docker.sock` (+ `containerd`, started explicitly first)
+    -> per-connection `wsl -d <distro> -u root -- socat STDIO UNIX-CONNECT:/var/run/docker.sock`
+      -> `dockerd -H unix:///var/run/docker.sock` (+ `containerd`, started explicitly first)
 
 Rules:
 - SINGLE ACTIVE DISTRO AT A TIME. Only one relay+daemon set may be up.
   Starting a second distro while one is active errors with a one-liner
   (`stop/shutdown first`). No multiplexing, no per-distro pipes.
-- NEVER `bind=0.0.0.0`. Always `bind=127.0.0.1`.
-- Port is DYNAMIC by default: pick a free 127.0.0.1 port at start time,
-  record it in state for `env`/probes. `--port` overrides (for pinned setups).
-  `2375` remains the conventional fallback default only if auto-pick is
-  disabled; collision must error clearly.
-- Guard against double-start (check pipe liveness + socket health first;
-  second `dockup` attaches/reports instead of starting a second relay).
+- NO TCP HOP. An earlier design proxied pipe -> 127.0.0.1:<port> -> socat
+  TCP-LISTEN in WSL; it failed empirically because WSL2 localhost-forwarding
+  does not reliably reach distro-bound 127.0.0.1 listeners
+  (`relay not reachable` while dockerd itself was healthy). STDIO bridges are
+  immune to WSL networking modes (NAT vs mirrored), need no ports/firewall,
+  and expose nothing to the LAN. Accepted cost: one short-lived wsl.exe per
+  API connection (~0.2-0.5s), fine for manual use.
+- There is NO `--port` flag. If a `--port` is ever reintroduced, it must be
+  127.0.0.1-only, dynamic by default — never `0.0.0.0` (LAN exposure).
+- Guard against double-start AND foreign listeners: pipe alive + active==name
+  means attach; pipe alive + anything else means HARD ERROR (never hijack
+  Docker Desktop's same-named pipe — that produced a silent false pass once).
 - Relay must be a raw byte-copy proxy (support HTTP hijack for
   `run -it`, `logs -f`, `exec -it`, `compose up`). No HTTP parsing.
-- Future hardening (P3, optional): STDIO mode — per-connection
-  `wsl -d <distro> -u root socat STDIO UNIX-CONNECT:/var/run/docker.sock`
-  with no TCP port at all. MVP stays on 127.0.0.1 TCP (simpler, fewer
-  processes per connection).
 
 ## 5. State model
 - Single JSON state file, e.g. `%APPDATA%\dockup\state.json`
@@ -70,7 +70,6 @@ Rules:
     "activeDistro": "<distro|empty>",
     "distros": {
       "<distro>": {
-        "relayPort": 0,
         "wslWasRunning": false,
         "bootedByDockup": false,
         "installedByDockup": {"packages": [], "repos": [], "files": []},
@@ -176,7 +175,7 @@ Rules:
 - `dockup version` — print `dockup vX.Y.Z (windows/amd64, commit ...)`.
   No checks.
 - Global `-d|--distro` applies to run/ps-relevant/daemon subcommands.
-  `--port` overrides relay port. `--help` on everything. Exit non-zero with a
+  `--help` on everything. Exit non-zero with a
   one-line reason on all failures (no stack traces to users).
 
 ## 9. Implementation notes (Go, Windows-only)
@@ -242,8 +241,8 @@ dockup/
   wslWasRunning-aware teardown) + Ctrl-C, `env`, `list`, `default`,
   `-d` override, `version`, `doctor` (basic).
 - P2: Alpine `setup`, `daemon start/stop/restart/status`, `ps`, `shutdown`.
-- P3: `revert` (snapshot-based delta removal +confirm), `cleanup`, `--port`
-  (dynamic port by default), log rotation, STDIO-mode spike.
+- P3: `revert` (snapshot-based delta removal +confirm), `cleanup`, log rotation.
+  (STDIO relay replaced the planned `--port`/dynamic-port work.)
 - Each phase ends with the acceptance checks in §12 for that phase's commands.
 
 ## 12. Acceptance criteria
@@ -272,9 +271,9 @@ dockup/
 - `doctor` fails clearly on custom kernel without iptables/overlayfs.
 
 ## 13. Risks / open questions for the builder
-- WSL localhost-relay behavior for the socat TCP hop: verify empirically that
-  Windows-loopback dial reaches distro-bound 127.0.0.1:<dynamic-port> on the
-  user's box; fallback is `socat` VSOCK listener (more code — avoid unless needed).
+- RESOLVED (was: WSL localhost-relay for a socat TCP hop): verified empirically
+  that Windows-loopback dial does NOT reliably reach distro-bound 127.0.0.1
+  listeners — killed the TCP design, STDIO bridges are primary. No open item.
 - `docker-ce` on Debian 13 (trixie): confirm Docker's repo serves trixie;
   fallback is Ubuntu-track or static binaries (decide at build time, note it).
 - dockerd needs iptables/nat kernel modules in WSL2: stock WSL2 kernel is
