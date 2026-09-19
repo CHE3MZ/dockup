@@ -70,8 +70,10 @@ jobs:
         run: |
           $o = .\dockup.exe daemon autostart
           if ($o -notmatch 'autostart: off') { throw "query = $o" }
-          .\dockup.exe ps | Select-String -Pattern 'STATUS','AUTOSTART','off' | Out-Null
-          .\dockup.exe ps
+          $ps = (.\dockup.exe ps) -join "`n"
+          foreach ($want in @('STATUS', 'AUTOSTART', 'off')) {
+            if ($ps -notmatch $want) { throw "ps missing ${want}: $ps" }
+          }
       - name: autostart on persists to config and Startup entry
         run: |
           .\dockup.exe daemon autostart on
@@ -79,8 +81,8 @@ jobs:
           if ($c.autostart -ne $true) { throw 'autostart not saved' }
           $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
           if (!(Test-Path $lnk)) { throw 'startup entry missing' }
-          $ps = .\dockup.exe ps
-          if ($ps -notmatch 'AUTOSTART') { throw 'ps missing AUTOSTART column' }
+          $ps = (.\dockup.exe ps) -join "`n"
+          if ($ps -notmatch 'AUTOSTART') { throw "ps missing AUTOSTART column: $ps" }
           if ($ps -notmatch '\bon\b') { throw "ps missing on: $ps" }
           .\dockup.exe doctor | Select-String -Pattern 'autostart on' | Out-Null
       - name: autostart off removes Startup entry
@@ -90,7 +92,8 @@ jobs:
           if ($c.autostart -ne $false) { throw 'autostart not cleared' }
           $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
           if (Test-Path $lnk) { throw 'startup entry still present' }
-          .\dockup.exe ps | Select-String -Pattern '\boff\b' | Out-Null
+          $ps = (.\dockup.exe ps) -join "`n"
+          if ($ps -notmatch '\boff\b') { throw "ps missing off: $ps" }
       - name: docker version via pipe
         run: docker -H npipe:////./pipe/dockup_engine version
       - name: hello-world via pipe
