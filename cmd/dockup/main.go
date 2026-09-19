@@ -168,17 +168,18 @@ func cmdSetup(cfg userconfig.Config, args []string) int {
 func usage() {
 	fmt.Print(ui.Header("dockup") + ui.White(" — docker engine in a dedicated WSL distro.\n") + `
 ` + ui.LightBlue("Usage:") + `
-  ` + ui.Bold("dockup") + `                  foreground run (Ctrl+C to stop)
-  ` + ui.Bold("dockup setup [--amd|--arm] [--path=DIR] [--dry-run]") + `
-  ` + ui.Bold("dockup uninstall") + `
-  ` + ui.Bold("dockup ps") + `                     STATUS / AUTOSTART table
-  ` + ui.Bold("dockup daemon start|stop|restart|status|log|autostart") + `
-  ` + ui.Bold("dockup shutdown") + `           stop everything
-  ` + ui.Bold("dockup doctor [--fix]") + `       preflight + repair stale state
-  ` + ui.Bold("dockup upgrade") + `              upgrade the in-distro engine to latest
-  ` + ui.Bold("dockup version") + `
-  ` + ui.Bold("dockup help [command]") + `     show help (also -h / --help everywhere)
-` + ui.Gray("Config: ~/.dockup/config.json (default_path, current_path, port, use_tcp, pipe_name, color)") + `
+  ` + ui.Bold("dockup") + `                      Foreground run (Ctrl+C to stop)
+  ` + ui.Bold("dockup setup 		      Launch the interactive setup wizard") + `
+  ` + ui.Bold("dockup uninstall") + `	      Uninstall the dockup distro from WSL
+  ` + ui.Bold("dockup ps") + `		      Show dockup's status
+  ` + ui.Bold("dockup daemon 	      Start | Stop | Restart | Status") + `
+  ` + ui.Bold("dockup shutdown") + `             Stop everything
+  ` + ui.Bold("dockup doctor [--fix]") + `       Repair stale states
+  ` + ui.Bold("dockup upgrade") + `              Upgrade the in-distro engine to latest
+  ` + ui.Bold("dockup version") + `	      Show current version
+  ` + ui.Bold("dockup help [command]") + `       Show this help text
+` + "\n" +
+ui.Gray("Config File: ~/.dockup/config.json") + `
 `)
 }
 
