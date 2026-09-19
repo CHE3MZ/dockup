@@ -136,9 +136,12 @@ func Status() int {
 	case daemonUp && alive:
 		logx.Info("running (daemon pid %d, pipe ok)", s.Daemon.PID)
 		return 0
-	case alive && s.Daemon.PID == 0:
+	case alive && s.Installed && s.Daemon.PID == 0:
 		logx.Info("running (foreground process holds the pipe)")
 		return 0
+	case alive && !s.Installed:
+		logx.Info("stopped (pipe held by another program, not dockup)")
+		return 1
 	case s.Installed && alive:
 		logx.Info("running (pipe alive, owner unknown)")
 		return 0

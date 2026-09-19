@@ -60,9 +60,13 @@ func Run() error {
 			logx.Info("info: docker socket absent (distro stopped or docker down)")
 		}
 	}
-	// Pipe?
+	// Pipe? Distinguish ours vs foreign (e.g. Docker Desktop preinstalled on GH runners).
 	if relay.Alive() {
-		ok("pipe " + config.PipeName + " alive")
+		if s.Installed {
+			ok("pipe " + config.PipeName + " alive")
+		} else {
+			logx.Info("info: pipe %s held by another program (not dockup) — stop it before running dockup", config.PipeName)
+		}
 	} else {
 		logx.Info("info: pipe %s not held (dockup stopped)", config.PipeName)
 	}

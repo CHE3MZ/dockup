@@ -104,7 +104,11 @@ func foreground() int {
 		return 1
 	}
 	if relay.Alive() {
-		fmt.Fprintln(os.Stderr, "dockup is already running (another foreground or daemon holds the pipe).")
+		if !s.Installed {
+			fmt.Fprintln(os.Stderr, "dockup: pipe is held by another program (e.g. Docker Desktop) — stop it before running dockup.")
+		} else {
+			fmt.Fprintln(os.Stderr, "dockup is already running (another foreground or daemon holds the pipe).")
+		}
 		return 1
 	}
 	fmt.Printf("starting helper...\n")
@@ -169,8 +173,10 @@ func cmdPs() int {
 	if relay.Alive() {
 		if s.Daemon.PID != 0 && daemon.DaemonAlive(s) {
 			fmt.Printf("running (daemon pid %d)\n", s.Daemon.PID)
-		} else {
+		} else if s.Installed {
 			fmt.Printf("running (foreground)\n")
+		} else {
+			fmt.Printf("stopped (pipe held by another program, not dockup)\n")
 		}
 		return 0
 	}

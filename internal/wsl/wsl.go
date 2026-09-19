@@ -178,7 +178,7 @@ func Import(distro, dir, tar string) error {
 	if statErr != nil {
 		return fmt.Errorf("wsl --import: tar not accessible %q: %w", tar, statErr)
 	}
-	if fi < 50<<20 {
+	if fi < 10<<20 {
 		return fmt.Errorf("wsl --import: tar %q suspiciously small (%d bytes), re-download", tar, fi)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
