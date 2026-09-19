@@ -304,7 +304,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'abort should exit 0' }
           $list = ''
           for ($i = 0; $i -lt 5 -and $list -notmatch 'dockup'; $i++) {
-            $list = (wsl --list --quiet) -join "`n"
+            $list = ((wsl --list --quiet) -join "`n") -replace "`0", ""
             if ($list -notmatch 'dockup') { Start-Sleep 2 }
           }
           if ($list -notmatch 'dockup') { throw "distro should still be present: [$list]" }
