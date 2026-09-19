@@ -171,23 +171,14 @@ jobs:
           docker -H $H rm -f dockup-e2e-sleeper dockup-e2e-logger | Out-Null
           if ($lg -notmatch 'line1[\s\S]*line2') { throw "logs -f failed: $lg" }
           exit 0
-      - name: probe piped-stdin EOF behavior (informational)
+      - name: piped-stdin EOF to cat (definitive)
         timeout-minutes: 5
         run: |
           $H = 'npipe:////./pipe/dockup_engine'
-          $cname = "dockup-e2e-catprobe-$env:GITHUB_RUN_ID"
-          $j = Start-Job -ScriptBlock { param($pipe, $name) echo probe-eof | docker -H $pipe run --name $name busybox cat 2>&1 } -ArgumentList $H, $cname
-          $done = Wait-Job $j -Timeout 60
-          if ($done) {
-            $out = (Receive-Job $j) -join "`n"
-            if ($out -match 'probe-eof') { Write-Output 'PROBE-OK: stdin EOF propagated, cat exited' }
-            else { Write-Output "PROBE-EMPTY: exited without echo: [$out]" }
-          } else {
-            Write-Output 'PROBE-HANG: stdin EOF does not propagate through byte-mode pipe bridge (known limitation, cat waits forever)'
-          }
-          Stop-Job $j -ErrorAction Continue | Out-Null
-          Remove-Job $j -Force -ErrorAction Continue
+          $cname = "dockup-e2e-catmain-$env:GITHUB_RUN_ID"
+          $o = echo probe-eof | docker -H $H run -i --name $cname busybox sh -c 'cat; echo MARKER'
           docker -H $H rm -f $cname | Out-Null
+          if (($o -join "`n") -notmatch 'probe-eof[\s\S]*MARKER') { throw "stdin EOF broken: [$o]" }
           exit 0
       - name: autostart entry boots daemon after stop (login simulation)
         run: |
