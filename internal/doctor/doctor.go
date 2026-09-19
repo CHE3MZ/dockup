@@ -9,6 +9,7 @@ import (
 
 	"github.com/CHE3MZ/dockup/internal/autostart"
 	"github.com/CHE3MZ/dockup/internal/config"
+	"github.com/CHE3MZ/dockup/internal/docker"
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
@@ -17,7 +18,12 @@ import (
 )
 
 // Run checks everything, repairs stale daemon PIDs, reports fixed vs attention.
-func Run() error {
+func Run() error { return RunEx(false) }
+
+// RunEx is Run plus optional remediation: with fix=true a missing or broken
+// in-distro engine is reinstalled/reconfigured (repo, packages, systemd
+// units, wsl.conf) and re-verified.
+func RunEx(fix bool) error {
 	fail := 0
 	ok := func(name string) { logx.Ok("ok: %s", name) }
 	bad := func(name, hint string) {
@@ -155,10 +161,45 @@ func Run() error {
 			logx.Info("fixed: cleared stale current_path")
 		}
 	}
+	// Remediation: reinstall/repair a broken in-distro engine.
+	if fix && wsl.Exists(config.DistroName) {
+		if ferr := fixDistro(); ferr != nil {
+			return ferr
+		}
+	}
 	if fail > 0 {
 		return fmt.Errorf("%d critical check(s) failed", fail)
 	}
 	logx.Info("doctor: all critical checks passed")
+	return nil
+}
+
+// fixDistro restores dockup's internal files when they are missing, broken,
+// or misconfigured: wsl.conf (systemd), the Docker apt repo, the engine
+// packages, and the systemd units. It re-verifies the daemon afterwards.
+func fixDistro() error {
+	distro := config.DistroName
+	if err := docker.TestDaemon(distro); err == nil {
+		logx.Ok("fix: engine already healthy, nothing to reinstall")
+	} else {
+		logx.Warn("engine unhealthy (%v), reinstalling", err)
+		if _, err := wsl.ExecScript(distro, 60*time.Second, docker.PreflightScript); err != nil {
+			return fmt.Errorf("fix: kernel preflight failed: %w", err)
+		}
+		if _, err := wsl.RunRetry(distro, "fix install docker", 10*time.Minute, 2, docker.InstallScript); err != nil {
+			return fmt.Errorf("fix: reinstall failed: %w", err)
+		}
+		logx.Ok("fix: engine packages reinstalled")
+	}
+	if _, err := wsl.ExecScript(distro, 3*time.Minute, docker.ConfigureScript); err != nil {
+		return fmt.Errorf("fix: reconfigure failed: %w", err)
+	}
+	_ = wsl.Terminate(distro)
+	time.Sleep(3 * time.Second)
+	if err := docker.TestDaemon(distro); err != nil {
+		return fmt.Errorf("fix: engine still unhealthy after repair: %w", err)
+	}
+	logx.Ok("fix: engine restored and answering")
 	return nil
 }
 

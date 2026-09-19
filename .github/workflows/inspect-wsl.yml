@@ -1,0 +1,104 @@
+name: inspect-wsl
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: build
+        run: go build -o dockup.exe ./cmd/dockup
+      - name: setup dockup (custom path)
+        run: echo y | .\dockup.exe setup --amd --path="C:\dockup-inspect-wsl"
+      - name: diagnose setup failure
+        if: failure()
+        continue-on-error: true
+        run: |
+          Get-Item $env:TEMP\dockup-* -ErrorAction Continue | Select-Object FullName, Length
+          wsl --list --verbose
+      - name: distro audit — init and services
+        run: |
+          $init = wsl -d dockup -u root -- ps -p 1 -o comm=
+          if ($init -notmatch 'systemd') { throw "PID 1 = $init" }
+          $st = wsl -d dockup -u root -- systemctl is-system-running
+          if ($st -notmatch 'running|degraded') { throw "system state = $st" }
+          foreach ($svc in @('docker', 'containerd')) {
+            $a = wsl -d dockup -u root -- systemctl is-active "$svc"
+            if ($a -notmatch 'active') { throw "$svc active = $a" }
+            $e = wsl -d dockup -u root -- systemctl is-enabled "$svc"
+            if ($e -notmatch 'enabled') { throw "$svc enabled = $e" }
+          }
+          wsl -d dockup -u root -- test -S /var/run/docker.sock
+          if ($LASTEXITCODE -ne 0) { throw 'docker.sock missing' }
+      - name: distro audit — packages and engine identity
+        run: |
+          wsl -d dockup -u root -- dpkg -l docker-ce docker-ce-cli containerd.io socat docker-buildx-plugin docker-compose-plugin
+          if ($LASTEXITCODE -ne 0) { throw 'engine packages missing' }
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          if (!$srv) { throw 'no server version' }
+          $drv = wsl -d dockup -u root -- docker info --format '{{.Driver}}'
+          if ($drv -notmatch 'overlay2') { throw "storage driver = $drv" }
+          $cg = wsl -d dockup -u root -- docker info --format '{{.CgroupVersion}}'
+          if ($cg -notmatch '2') { throw "cgroup version = $cg" }
+      - name: distro audit — config files and kernel features
+        run: |
+          $wc = wsl -d dockup -u root -- cat /etc/wsl.conf
+          if ($wc -notmatch 'systemd=true') { throw "wsl.conf = $wc" }
+          wsl -d dockup -u root -- test -f /etc/apt/sources.list.d/docker.list
+          if ($LASTEXITCODE -ne 0) { throw 'docker apt source missing' }
+          wsl -d dockup -u root -- test -f /etc/apt/keyrings/docker.asc
+          if ($LASTEXITCODE -ne 0) { throw 'docker apt key missing' }
+          wsl -d dockup -u root -- iptables --version
+          if ($LASTEXITCODE -ne 0) { throw 'iptables missing' }
+          wsl -d dockup -u root -- grep -q overlay /proc/filesystems
+          if ($LASTEXITCODE -ne 0) { throw 'overlayfs missing' }
+      - name: provenance manifest
+        run: |
+          wsl -d dockup -u root -- dpkg-query -W -f='${Package} ${Version}\n' docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin socat | Set-Content provenance.txt
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          "engine: $srv" | Add-Content provenance.txt
+          Get-Content provenance.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dockup-provenance
+          path: provenance.txt
+      - name: upgrade engine to latest
+        timeout-minutes: 10
+        run: |
+          .\dockup.exe upgrade
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          if (!$srv) { throw 'no server version after upgrade' }
+          .\dockup.exe doctor
+      - name: self-heal — break the engine
+        run: |
+          wsl -d dockup -u root -- systemctl stop docker.service
+          Start-Sleep 3
+          wsl -d dockup -u root -- docker version --format '{{.Server.Version}}' | Out-Null
+          if ($LASTEXITCODE -eq 0) { throw 'engine should be down after stop' }
+      - name: self-heal — doctor --fix restores it
+        timeout-minutes: 15
+        run: |
+          .\dockup.exe doctor --fix
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          if (!$srv) { throw 'engine still down after fix' }
+          .\dockup.exe doctor
+      - name: shutdown and uninstall
+        run: |
+          .\dockup.exe shutdown
+          echo y | .\dockup.exe uninstall
+          $list = wsl --list --quiet
+          if ($list -match 'dockup') { throw 'distro still present' }
+      - name: legacy recovery — missing config recreates
+        run: |
+          Remove-Item "$env:USERPROFILE\.dockup\config.json" -Force
+          .\dockup.exe ps
+          if (!(Test-Path "$env:USERPROFILE\.dockup\config.json")) { throw 'config not recreated' }
+          $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
+          if ($c.autostart -ne $false) { throw 'autostart default broken' }
+          if ($c.port -ne 2375) { throw 'port default broken' }
+          .\dockup.exe doctor

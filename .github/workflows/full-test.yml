@@ -99,6 +99,31 @@ jobs:
       - name: hello-world via pipe
         timeout-minutes: 5
         run: docker -H npipe:////./pipe/dockup_engine run --rm hello-world
+      - name: compose via pipe
+        timeout-minutes: 5
+        run: |
+          $env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'
+          docker compose version
+          @('services:', '  hello:', '    image: hello-world') | Set-Content compose.yaml
+          docker compose -f compose.yaml up --abort-on-container-exit
+          docker compose -f compose.yaml down
+          Remove-Item compose.yaml
+      - name: autostart entry boots daemon after stop (login simulation)
+        run: |
+          .\dockup.exe daemon autostart on
+          .\dockup.exe daemon stop
+          $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
+          $ws = New-Object -ComObject WScript.Shell
+          $sc = $ws.CreateShortcut($lnk)
+          Start-Process -FilePath $sc.TargetPath -ArgumentList $sc.Arguments -WindowStyle Hidden
+          $up = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            .\dockup.exe daemon status | Out-Null
+            if ($LASTEXITCODE -eq 0) { $up = $true; break }
+            Start-Sleep 2
+          }
+          if (!$up) { throw 'daemon did not come up via startup entry' }
+          .\dockup.exe daemon autostart off
       - name: enable TCP on custom port
         run: |
           $p = "$env:USERPROFILE\.dockup\config.json"
@@ -122,6 +147,11 @@ jobs:
           $c | ConvertTo-Json | Set-Content $p
           .\dockup.exe daemon restart
           .\dockup.exe daemon status
+      - name: upgrade engine to latest
+        timeout-minutes: 10
+        run: |
+          .\dockup.exe upgrade
+          docker -H npipe:////./pipe/dockup_engine version
       - name: daemon stop
         run: .\dockup.exe daemon stop
       - name: shutdown

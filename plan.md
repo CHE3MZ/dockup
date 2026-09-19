@@ -560,6 +560,28 @@ no import, no unregister).
   `relay.EngineReady`), `starting...` (pipe up, engine not answering yet),
   `stopped`; `AUTOSTART` = `on`/`off` from config. Decision logic is pure
   (`Classify`) and unit-tested; TCP state (when enabled) follows as a gray
-  line. `full-test.yml` asserts query/set/config/shortcut/`ps`/doctor for
+  line.   `full-test.yml` asserts query/set/config/shortcut/`ps`/doctor for
   the whole cycle.
+
+### 10.8 Compose, autostart proof, inspection, upgrade, self-heal
+
+- `full-test.yml` additionally runs `docker compose` (plugin) `up/down`
+  with a hello-world service over the pipe, executes the Startup `.lnk`
+  target after `daemon stop` to prove a login boot works (polls `daemon
+  status`), and runs `dockup upgrade` + pipe `version`.
+- `scoop-test.yml` additionally installs `docker-compose` (classic) and
+  runs `docker-compose up/down` through `DOCKER_HOST`.
+- `inspect-wsl.yml` (push + dispatch) audits the generated distro:
+  systemd PID 1, unit states, socket, package set, `docker info`
+  (overlay2, cgroup v2), `wsl.conf`, apt repo/key, iptables/overlay;
+  uploads a `provenance.txt` manifest artifact (package versions +
+  engine) for cross-run reproducibility comparison; runs `dockup
+  upgrade`; breaks the engine (`systemctl stop docker`), asserts it is
+  down, runs `dockup doctor --fix` (reinstalls/reconfigures via
+  `InstallScript` + `ConfigureScript` when `TestDaemon` fails) and
+  asserts recovery; verifies legacy recovery (deleted config.json is
+  recreated with defaults by any command).
+- `dockup upgrade` (`internal/docker.Upgrade`: apt update + latest
+  engine/plugin packages + unit restarts + `TestDaemon`) and `dockup
+  doctor --fix` share the same idempotent scripts as setup.
 

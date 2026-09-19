@@ -12,6 +12,7 @@ import (
 	"github.com/CHE3MZ/dockup/internal/autostart"
 	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/daemon"
+	"github.com/CHE3MZ/dockup/internal/docker"
 	"github.com/CHE3MZ/dockup/internal/doctor"
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/pstable"
@@ -98,11 +99,30 @@ func run(args []string) int {
 			doctorHelp()
 			return 0
 		}
-		if err := doctor.Run(); err != nil {
+		fix := false
+		for _, a := range args[1:] {
+			if a == "--fix" {
+				fix = true
+			} else {
+				logx.Err("unknown doctor flag %q (try dockup doctor --help)", a)
+				return 1
+			}
+		}
+		if err := doctor.RunEx(fix); err != nil {
 			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
 			return 1
 		}
 		return 0
+	case "upgrade":
+		if hasHelpFlag(args[1:]) {
+			upgradeHelp()
+			return 0
+		}
+		if len(args[1:]) > 0 {
+			logx.Err("unknown upgrade flag %q (try dockup upgrade --help)", args[1])
+			return 1
+		}
+		return cmdUpgrade()
 	case "__serve":
 		return serveForever(cfg)
 	default:
@@ -154,7 +174,8 @@ func usage() {
   ` + ui.Bold("dockup ps") + `                     STATUS / AUTOSTART table
   ` + ui.Bold("dockup daemon start|stop|restart|status|log|autostart") + `
   ` + ui.Bold("dockup shutdown") + `           stop everything
-  ` + ui.Bold("dockup doctor") + `             preflight + repair stale state
+  ` + ui.Bold("dockup doctor [--fix]") + `       preflight + repair stale state
+  ` + ui.Bold("dockup upgrade") + `              upgrade the in-distro engine to latest
   ` + ui.Bold("dockup version") + `
   ` + ui.Bold("dockup help [command]") + `     show help (also -h / --help everywhere)
 ` + ui.Gray("Config: ~/.dockup/config.json (default_path, current_path, port, use_tcp, pipe_name, color)") + `
@@ -175,6 +196,8 @@ func helpTopic(name string) int {
 		shutdownHelp()
 	case "doctor":
 		doctorHelp()
+	case "upgrade":
+		upgradeHelp()
 	case "version":
 		versionHelp()
 	default:
@@ -261,11 +284,42 @@ func shutdownHelp() {
 func doctorHelp() {
 	fmt.Print(ui.Header("dockup doctor") + `
   Preflight checks (WSL, distro, systemd, docker socket, pipe/TCP,
-  config) plus repair of stale state.
+  config, autostart) plus repair of stale state.
+
+  With ` + ui.Bold("--fix") + `, a missing or broken in-distro engine is
+  reinstalled/reconfigured (apt repo, packages, systemd units,
+  wsl.conf) and re-verified.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup doctor
+  dockup doctor [--fix]
 `)
+}
+
+func upgradeHelp() {
+	fmt.Print(ui.Header("dockup upgrade") + `
+  Upgrade the Docker engine and dependencies inside the dockup distro
+  (docker-ce, cli, containerd, buildx/compose plugins, socat) to their
+  latest versions, restart the services, and verify the daemon answers.
+
+` + ui.LightBlue("Usage:") + `
+  dockup upgrade
+`)
+}
+
+// cmdUpgrade upgrades the in-distro engine to latest.
+func cmdUpgrade() int {
+	s, _ := state.Load()
+	if !s.Installed && !wsl.Exists(config.DistroName) {
+		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
+		return 1
+	}
+	fmt.Printf("%s\n", ui.White("upgrading docker engine inside dockup..."))
+	if err := docker.Upgrade(config.DistroName); err != nil {
+		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: upgrade failed: %v", err)))
+		return 1
+	}
+	logx.Ok("upgrade complete")
+	return 0
 }
 
 func versionHelp() {

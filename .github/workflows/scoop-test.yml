@@ -16,11 +16,19 @@ jobs:
           $env:Path = "$env:USERPROFILE\scoop\shims;$env:Path"
           scoop install docker
           "$env:USERPROFILE\scoop\shims" | Out-File -Append $env:GITHUB_PATH
-      - name: verify scoop docker CLI
+      - name: scoop install docker-compose
+        run: |
+          $env:Path = "$env:USERPROFILE\scoop\shims;$env:Path"
+          scoop install docker-compose
+          "$env:USERPROFILE\scoop\shims" | Out-File -Append $env:GITHUB_PATH
+      - name: verify scoop docker CLIs
         run: |
           $src = (Get-Command docker).Source
           if ($src -notlike '*scoop*') { throw "docker not from scoop: $src" }
           docker --version
+          $csrc = (Get-Command docker-compose).Source
+          if ($csrc -notlike '*scoop*') { throw "docker-compose not from scoop: $csrc" }
+          docker-compose --version
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
@@ -48,6 +56,14 @@ jobs:
         run: |
           $env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'
           docker run --rm hello-world
+      - name: compose via scoop docker-compose
+        timeout-minutes: 5
+        run: |
+          $env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'
+          @('services:', '  hello:', '    image: hello-world') | Set-Content compose.yaml
+          docker-compose -f compose.yaml up --abort-on-container-exit
+          docker-compose -f compose.yaml down
+          Remove-Item compose.yaml
       - name: daemon stop
         run: .\dockup.exe daemon stop
       - name: shutdown

@@ -33,6 +33,16 @@ systemctl start containerd.service || true
 systemctl start docker.service || true
 `
 
+// UpgradeScript refreshes apt and moves engine packages to their latest
+// versions, then restarts the systemd units. Idempotent.
+const UpgradeScript = `set -eu
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin socat
+systemctl restart containerd.service
+systemctl restart docker.service
+`
+
 // PreflightScript checks kernel features dockerd needs.
 // NOTE: iptables is NOT checked here — minimal rootfs has no iptables binary
 // yet (it arrives as a docker-ce dependency). iptables is verified in
@@ -79,4 +89,13 @@ func TestDaemon(distro string) error {
 		return fmt.Errorf("docker server version empty")
 	}
 	return nil
+}
+
+// Upgrade moves engine packages to their latest versions and verifies the
+// daemon answers afterwards.
+func Upgrade(distro string) error {
+	if _, err := wsl.RunRetry(distro, "upgrade docker", 10*time.Minute, 2, UpgradeScript); err != nil {
+		return err
+	}
+	return TestDaemon(distro)
 }
