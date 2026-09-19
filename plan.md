@@ -615,12 +615,15 @@ no import, no unregister).
   boot with nothing installed refuses with "autostart skipped");
   autostart off skips the check entirely.
 - Migration without false-positives: `ReconcileInstalled` flips the
-  flag on only from a `state.json` proving a past setup, and never
-  clears; `doctor` clears it only when `wsl --list` SUCCEEDS and the
-  distro is absent (error-blind `Exists` would wipe it on transient
-  wsl.exe failures).
+  flag on only from a `state.json` proving a past setup AND a present
+  distro (guarded by `wsl.Exists`, so a stale state file can never
+  resurrect the flag after doctor/test clears it), and never clears;
+  `doctor` clears it only when `wsl --list` SUCCEEDS and the distro is
+  absent (error-blind `Exists` would wipe it on transient wsl.exe
+  failures).
 - CI: `full-test` asserts true on setup/reinstall, the autostart-on
-  refusal when false, and false after uninstall; `e2e` smoke covers
+  refusal on an empty machine (post-uninstall), and false after
+  uninstall; `e2e` smoke covers the same refusal on a fresh runner,
   the foreign-pipe `ps` branch (a .NET pipe holder) and
   restart-without-setup.
 

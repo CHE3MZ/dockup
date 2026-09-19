@@ -28,6 +28,16 @@ jobs:
         run: .\dockup.exe doctor
       - name: ps (expect stopped)
         run: .\dockup.exe ps
+      - name: daemon start refused when nothing installed
+        run: |
+          .\dockup.exe daemon autostart on
+          $o = .\dockup.exe daemon start 2>&1
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
+          if (($o -join "`n") -notmatch 'autostart skipped') { throw "wrong refusal: $o" }
+          .\dockup.exe daemon autostart off
+          $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
+          if (Test-Path $lnk) { throw 'startup entry left behind' }
+          exit 0
       - name: ps reports foreign pipe holder
         run: |
           $job = Start-Job {
