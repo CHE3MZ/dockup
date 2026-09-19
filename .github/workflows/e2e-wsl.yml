@@ -62,6 +62,7 @@ jobs:
       - name: docker version via pipe
         run: docker -H npipe:////./pipe/dockup_engine version
       - name: hello-world via pipe
+        timeout-minutes: 5
         run: docker -H npipe:////./pipe/dockup_engine run --rm hello-world
       - name: daemon stop
         run: .\dockup.exe daemon stop

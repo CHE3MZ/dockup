@@ -122,14 +122,28 @@ func bridgeConn(pipe net.Conn, distro string) {
 		return
 	}
 	dbg("bridge wsl pid %d", cmd.Process.Pid)
-	done := make(chan struct{})
+	// Either direction finishing must tear the whole bridge down:
+	// some `docker run` streams print output but keep the socket half-open,
+	// which deadlocked the old sequential Wait (GH e2e hung 16min after
+	// hello-world output). Kill socat as soon as one side ends.
+	done := make(chan struct{}, 2)
 	go func() {
-		defer close(done)
 		_, _ = io.Copy(toProc, pipe)
 		_ = toProc.Close()
+		done <- struct{}{}
 	}()
-	_, _ = io.Copy(pipe, fromProc)
-	werr := cmd.Wait()
+	go func() {
+		_, _ = io.Copy(pipe, fromProc)
+		done <- struct{}{}
+	}()
 	<-done
+	_ = cmd.Process.Kill()
+	timer := time.NewTimer(5 * time.Second)
+	select {
+	case <-done:
+	case <-timer.C:
+	}
+	timer.Stop()
+	werr := cmd.Wait()
 	dbg("bridge done (wait=%v)", werr)
 }
