@@ -28,12 +28,16 @@ jobs:
         run: .\dockup.exe doctor
       - name: ps (expect stopped)
         run: .\dockup.exe ps
-      - name: daemon status (expect stopped)
-        run: .\dockup.exe daemon status
-        continue-on-error: true
-      - name: setup rejects double arch flags
-        run: .\dockup.exe setup --amd --arm
-        continue-on-error: true
+      - name: daemon status exits 1 when stopped
+        run: |
+          .\dockup.exe daemon status
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
+          exit 0
+      - name: setup rejects double arch flags with exit 1
+        run: |
+          .\dockup.exe setup --amd --arm
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
+          exit 0
   full-setup:
     if: github.event.inputs.full-setup == 'true'
     runs-on: windows-latest

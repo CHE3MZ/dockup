@@ -66,6 +66,34 @@ jobs:
         run: .\dockup.exe daemon start
       - name: daemon status
         run: .\dockup.exe daemon status
+      - name: daemon log follows and exits on kill
+        run: |
+          $tail = "logtail.txt"
+          if (Test-Path $tail) { Remove-Item $tail }
+          $p = Start-Process .\dockup.exe -ArgumentList 'daemon','log' -RedirectStandardOutput $tail -WindowStyle Hidden -PassThru
+          Start-Sleep 5
+          if ($p.HasExited) { throw 'daemon log exited early' }
+          Stop-Process -Id $p.Id -Force
+          Start-Sleep 1
+          $t = Get-Content $tail -Raw
+          if ($t -notmatch 'read-only') { throw "unexpected log tail: $t" }
+          Remove-Item $tail
+          exit 0
+      - name: ps shows starting while engine is down
+        run: |
+          wsl -d dockup -u root -- systemctl stop docker.service docker.socket
+          Start-Sleep 3
+          $ps = (.\dockup.exe ps) -join "`n"
+          if ($ps -notmatch 'starting\.\.\.') { throw "expected starting..., got: $ps" }
+          wsl -d dockup -u root -- systemctl start docker.service
+          $back = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            $ps = (.\dockup.exe ps) -join "`n"
+            if ($ps -match 'running') { $back = $true; break }
+            Start-Sleep 2
+          }
+          if (!$back) { throw "engine did not come back: $ps" }
+          exit 0
       - name: autostart defaults off
         run: |
           $o = .\dockup.exe daemon autostart
@@ -108,6 +136,29 @@ jobs:
           docker compose -f compose.yaml up --abort-on-container-exit
           docker compose -f compose.yaml down
           Remove-Item compose.yaml
+      - name: stdin and tty through the bridge
+        timeout-minutes: 5
+        run: |
+          $H = 'npipe:////./pipe/dockup_engine'
+          $o = echo hello | docker -H $H run --rm -i busybox cat
+          if (($o -join "`n") -notmatch 'hello') { throw "stdin bridge failed: $o" }
+          $t = docker -H $H run --rm -t busybox echo tty-ok
+          if (($t -join "`n") -notmatch 'tty-ok') { throw "tty bridge failed: $t" }
+          exit 0
+      - name: exec and logs -f through the bridge
+        timeout-minutes: 5
+        run: |
+          $H = 'npipe:////./pipe/dockup_engine'
+          docker -H $H run -d --name dockup-e2e-sleeper busybox sleep 60
+          $e = docker -H $H exec dockup-e2e-sleeper echo exec-ok
+          if (($e -join "`n") -notmatch 'exec-ok') { throw "exec failed: $e" }
+          $i = echo exec-stdin | docker -H $H exec -i dockup-e2e-sleeper cat
+          if (($i -join "`n") -notmatch 'exec-stdin') { throw "exec stdin failed: $i" }
+          docker -H $H run -d --name dockup-e2e-logger busybox sh -c 'echo line1; sleep 2; echo line2'
+          $lg = (docker -H $H logs -f dockup-e2e-logger) -join "`n"
+          docker -H $H rm -f dockup-e2e-sleeper dockup-e2e-logger | Out-Null
+          if ($lg -notmatch 'line1[\s\S]*line2') { throw "logs -f failed: $lg" }
+          exit 0
       - name: autostart entry boots daemon after stop (login simulation)
         run: |
           .\dockup.exe daemon autostart on
@@ -154,6 +205,31 @@ jobs:
           docker -H npipe:////./pipe/dockup_engine version
       - name: daemon stop
         run: .\dockup.exe daemon stop
+      - name: foreground run serves the bridge
+        run: |
+          $p = Start-Process .\dockup.exe -WindowStyle Hidden -PassThru
+          try {
+            $up = $false
+            $ps = ''
+            for ($i = 0; $i -lt 30; $i++) {
+              $ps = (.\dockup.exe ps) -join "`n"
+              if ($ps -match 'running') { $up = $true; break }
+              Start-Sleep 2
+            }
+            if (!$up) { throw "foreground did not come up: $ps" }
+            docker -H npipe:////./pipe/dockup_engine version | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'version via foreground failed' }
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction Continue
+          }
+          $down = $false
+          for ($i = 0; $i -lt 15; $i++) {
+            $ps = (.\dockup.exe ps) -join "`n"
+            if ($ps -match 'stopped') { $down = $true; break }
+            Start-Sleep 1
+          }
+          if (!$down) { throw "foreground did not release the pipe: $ps" }
+          exit 0
       - name: shutdown
         run: .\dockup.exe shutdown
       - name: uninstall keeps default path
