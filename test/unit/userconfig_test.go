@@ -170,3 +170,53 @@ func TestEffectivePipeDefaultAndCustom(t *testing.T) {
 		t.Fatalf("got %q", c.EffectivePipe())
 	}
 }
+
+func TestInstalledDefaultsFalse(t *testing.T) {
+	withTempHome(t)
+	c, err := userconfig.Ensure()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Installed {
+		t.Fatal("installed should default to false")
+	}
+}
+
+func TestInstalledRoundTrip(t *testing.T) {
+	withTempHome(t)
+	c := userconfig.Defaults()
+	c.Installed = true
+	if err := userconfig.Save(c); err != nil {
+		t.Fatal(err)
+	}
+	got, err := userconfig.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Installed {
+		t.Fatal("installed not persisted")
+	}
+}
+
+func TestReconcileAdoptsButNeverClears(t *testing.T) {
+	withTempHome(t)
+	if _, err := userconfig.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := userconfig.ReconcileInstalled(true)
+	if err != nil || !changed {
+		t.Fatalf("expected flip, got changed=%v err=%v", changed, err)
+	}
+	changed, err = userconfig.ReconcileInstalled(true)
+	if err != nil || changed {
+		t.Fatalf("expected no-op, got changed=%v err=%v", changed, err)
+	}
+	// false must never clear a true flag (no false-positive wipeouts).
+	if _, err := userconfig.ReconcileInstalled(false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := userconfig.Load()
+	if err != nil || !got.Installed {
+		t.Fatalf("flag was cleared: %+v %v", got, err)
+	}
+}

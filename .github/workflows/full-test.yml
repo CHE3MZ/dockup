@@ -74,12 +74,14 @@ jobs:
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path = $($c.default_path)" }
           if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
+          if ($c.installed -ne $true) { throw 'installed not set on success' }
       - name: reinstall over existing distro
         timeout-minutes: 15
         run: |
           echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
+          if ($c.installed -ne $true) { throw 'installed not set on reinstall' }
       - name: diagnose setup failure
         if: failure()
         continue-on-error: true
@@ -275,6 +277,21 @@ jobs:
           docker -H npipe:////./pipe/dockup_engine version
       - name: daemon stop
         run: .\dockup.exe daemon stop
+      - name: daemon refuses when installed flag is false
+        run: |
+          $p = "$env:USERPROFILE\.dockup\config.json"
+          $c = Get-Content $p -Raw | ConvertFrom-Json
+          $c.installed = $false
+          $c | ConvertTo-Json | Set-Content $p
+          .\dockup.exe daemon autostart on
+          $o = .\dockup.exe daemon start 2>&1
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
+          if (($o -join "`n") -notmatch 'autostart skipped') { throw "wrong refusal: $o" }
+          $c = Get-Content $p -Raw | ConvertFrom-Json
+          $c.installed = $true
+          $c | ConvertTo-Json | Set-Content $p
+          .\dockup.exe daemon autostart off
+          exit 0
       - name: foreground run serves the bridge
         run: |
           $p = Start-Process .\dockup.exe -WindowStyle Hidden -PassThru
@@ -322,4 +339,5 @@ jobs:
           if ($list -match 'dockup') { throw 'distro still present after uninstall' }
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.current_path) { throw "current_path not cleared: $($c.current_path)" }
+          if ($c.installed -ne $false) { throw 'installed not cleared on uninstall' }
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path not retained: $($c.default_path)" }

@@ -79,6 +79,15 @@ func RunEx(o Options) int {
 		logx.Err("unknown arch %q", arch)
 		return 1
 	}
+	// fail marks the attempt as not-installed (the distro may be gone or
+	// half-built) and exits 1. It is only ever called after the confirm
+	// prompts, so aborts, dry runs, and pre-prompt errors never touch it.
+	fail := func() int {
+		cfg.Installed = false
+		cfg.CurrentPath = ""
+		_ = userconfig.Save(cfg)
+		return 1
+	}
 	// Already installed?
 	if wsl.Exists(config.DistroName) {
 		fmt.Printf("%s\n", ui.Yellow("Warning : An installation of dockup already exists on WSL, do you wish to delete that installation and let dockup re-install a new dockup instance on WSL ? [y/n]"))
@@ -112,7 +121,7 @@ func RunEx(o Options) int {
 	installDir, err := askInstallPath(cfg, o.Path)
 	if err != nil {
 		logx.Err("%v", err)
-		return 1
+		return fail()
 	}
 
 	url := config.RootfsURL(arch)
@@ -143,7 +152,7 @@ func RunEx(o Options) int {
 		dest = fallbackDest
 		if err2 := download.Fetch(fallback, dest, nil); err2 != nil {
 			logx.Err("download failed: %v", err2)
-			return 1
+			return fail()
 		}
 	}
 	fmt.Printf("\n")
@@ -152,17 +161,17 @@ func RunEx(o Options) int {
 	logx.Info("importing debian into WSL as \"dockup\"... (0%%)")
 	if err := os.MkdirAll(installDir, 0o700); err != nil {
 		logx.Err("mkdir wsl dir: %v", err)
-		return 1
+		return fail()
 	}
 	if st, err := os.Stat(dest); err == nil {
 		logx.Info("downloaded %s (%d MB) -> %s", config.ArchTarName(arch), st.Size()/(1024*1024), dest)
 	} else {
 		logx.Err("download missing at %s: %v", dest, err)
-		return 1
+		return fail()
 	}
 	if err := wsl.Import(config.DistroName, installDir, dest); err != nil {
 		logx.Err("import failed: %v", err)
-		return 1
+		return fail()
 	}
 	logx.Info("importing debian into WSL as \"dockup\"... (100%%)")
 
@@ -173,7 +182,7 @@ func RunEx(o Options) int {
 		if askRetryAbort() {
 			return Run(arch)
 		}
-		return 1
+		return fail()
 	}
 	logx.Info("test results : success")
 
@@ -185,7 +194,7 @@ func RunEx(o Options) int {
 		if askRetryAbort() {
 			return Run(arch)
 		}
-		return 1
+		return fail()
 	}
 	logx.Info("installing docker... (100%%)")
 
@@ -197,7 +206,7 @@ func RunEx(o Options) int {
 		if askRetryAbort() {
 			return Run(arch)
 		}
-		return 1
+		return fail()
 	}
 	logx.Info("configuring docker...  (100%%)")
 
@@ -209,7 +218,7 @@ func RunEx(o Options) int {
 		if askRetryAbort() {
 			return Run(arch)
 		}
-		return 1
+		return fail()
 	}
 	logx.Info("test results : success")
 
@@ -228,9 +237,11 @@ func RunEx(o Options) int {
 		return nil
 	})
 	// Remember the used path as both default (prefilled next time) and
-	// current (where dockup looks for the distro).
+	// current (where dockup looks for the distro). Only a fully successful
+	// setup earns installed=true.
 	cfg.DefaultPath = filepath.ToSlash(installDir)
 	cfg.CurrentPath = filepath.ToSlash(installDir)
+	cfg.Installed = true
 	_ = userconfig.Save(cfg)
 	_ = os.Remove(dest)
 	_ = os.Remove(fallbackDest)
@@ -294,10 +305,12 @@ func Uninstall() int {
 		return nil
 	})
 	_ = os.RemoveAll(currentInstallDir())
-	// Keep default_path for the next setup, clear current_path.
+	// Keep default_path for the next setup; the distro is gone so both
+	// current_path and installed go away with it.
 	if cfg, err := userconfig.Load(); err == nil {
 		cfg = cfg.WithDefaults()
 		cfg.CurrentPath = ""
+		cfg.Installed = false
 		_ = userconfig.Save(cfg)
 	}
 	logx.Ok("dockup uninstalled")

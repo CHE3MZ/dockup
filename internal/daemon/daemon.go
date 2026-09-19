@@ -47,6 +47,12 @@ func DaemonAlive(s state.State) bool {
 func Start() error {
 	ucfg, _ := userconfig.Load()
 	pipe := ucfg.WithDefaults().EffectivePipe()
+	// The installed flag is consulted ONLY when autostart is on: a login
+	// boot with nothing installed must refuse instead of running. With
+	// autostart off this check is skipped entirely.
+	if ucfg.WithDefaults().Autostart && !ucfg.WithDefaults().Installed {
+		return fmt.Errorf("dockup is not installed — autostart skipped (run dockup setup first)")
+	}
 	var startErr error
 	err := state.WithLock(func(s *state.State) error {
 		if !s.Installed {

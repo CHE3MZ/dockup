@@ -39,6 +39,12 @@ func ensureUserConfig() userconfig.Config {
 		ui.Warn("could not set up %s: %v", userconfig.File(), err)
 		return userconfig.Defaults()
 	}
+	// Adopt pre-flag installs: a state.json proving a past successful setup
+	// flips the flag on. Never clears — see ReconcileInstalled.
+	if s, serr := state.Load(); serr == nil && s.Installed {
+		_, _ = userconfig.ReconcileInstalled(true)
+		cfg, _ = userconfig.Load()
+	}
 	cfg = cfg.WithDefaults()
 	ui.SetEnabled(cfg.Color && ui.Enabled())
 	return cfg

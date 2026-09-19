@@ -28,6 +28,27 @@ jobs:
         run: .\dockup.exe doctor
       - name: ps (expect stopped)
         run: .\dockup.exe ps
+      - name: ps reports foreign pipe holder
+        run: |
+          $job = Start-Job {
+            $srv = [System.IO.Pipes.NamedPipeServerStream]::new('dockup_engine', [System.IO.Pipes.PipeDirection]::InOut, 1, [System.IO.Pipes.PipeTransmissionMode]::Byte, [System.IO.Pipes.PipeOptions]::Asynchronous)
+            $t = $srv.WaitForConnectionAsync()
+            Start-Sleep 30
+          }
+          $ps = ''
+          for ($i = 0; $i -lt 5 -and $ps -notmatch 'another program'; $i++) {
+            $ps = (.\dockup.exe ps) -join "`n"
+            Start-Sleep 2
+          }
+          Stop-Job $job -ErrorAction Continue | Out-Null
+          Remove-Job $job -Force -ErrorAction Continue
+          if ($ps -notmatch 'another program') { throw "expected foreign hint: [$ps]" }
+          exit 0
+      - name: daemon restart without setup exits 1
+        run: |
+          .\dockup.exe daemon restart
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
+          exit 0
       - name: daemon status exits 1 when stopped
         run: |
           .\dockup.exe daemon status

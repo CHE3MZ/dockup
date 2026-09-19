@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/CHE3MZ/dockup/internal/autostart"
@@ -153,12 +154,35 @@ func RunEx(fix bool) error {
 		})
 		logx.Info("fixed: cleared stale daemon pid %d", s.Daemon.PID)
 	}
-	// Stale current_path repair: distro gone but config still points at it.
-	if !wsl.Exists(config.DistroName) {
-		if c, lerr := userconfig.Load(); lerr == nil && c.CurrentPath != "" {
-			c.CurrentPath = ""
-			_ = userconfig.Save(c.WithDefaults())
-			logx.Info("fixed: cleared stale current_path")
+	// Stale install record repair, but only on a CONFIRMED-absent distro:
+	// wsl.Exists is blind to list errors, and clearing installed on a
+	// transient wsl.exe failure would be exactly the false-positive we
+	// must avoid.
+	if distroList, lerr := wsl.List(); lerr == nil {
+		found := false
+		for _, d := range distroList {
+			if strings.EqualFold(strings.TrimSpace(d), config.DistroName) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if c, cerr := userconfig.Load(); cerr == nil {
+				fixed := false
+				if c.CurrentPath != "" {
+					c.CurrentPath = ""
+					fixed = true
+					logx.Info("fixed: cleared stale current_path")
+				}
+				if c.Installed {
+					c.Installed = false
+					fixed = true
+					logx.Info("fixed: cleared stale installed flag")
+				}
+				if fixed {
+					_ = userconfig.Save(c.WithDefaults())
+				}
+			}
 		}
 	}
 	// Remediation: reinstall/repair a broken in-distro engine.

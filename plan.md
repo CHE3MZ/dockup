@@ -604,6 +604,26 @@ no import, no unregister).
   `--arm` install (no arm64 runners), cross-run provenance diffing
   (artifacts exist; comparison stays manual).
 
+### 10.11 Installed flag + remaining unproven branches
+
+- `config.json` gains `"installed": false` (default). `setup` sets it
+  true ONLY on the success save; every post-prompt failure path clears
+  it (and `current_path`) via a shared `fail()` — the distro may be
+  gone or half-built. Aborts (`n`/dry-run/pre-prompt errors) never
+  touch it. `uninstall` clears it only after a successful unregister.
+- `daemon.Start` consults the flag ONLY when autostart is on (login
+  boot with nothing installed refuses with "autostart skipped");
+  autostart off skips the check entirely.
+- Migration without false-positives: `ReconcileInstalled` flips the
+  flag on only from a `state.json` proving a past setup, and never
+  clears; `doctor` clears it only when `wsl --list` SUCCEEDS and the
+  distro is absent (error-blind `Exists` would wipe it on transient
+  wsl.exe failures).
+- CI: `full-test` asserts true on setup/reinstall, the autostart-on
+  refusal when false, and false after uninstall; `e2e` smoke covers
+  the foreign-pipe `ps` branch (a .NET pipe holder) and
+  restart-without-setup.
+
 ### 10.9 Bridge I/O coverage + stdin-EOF fix (done)
 
 `full-test.yml` covers: piped stdin bytes (`run -i ... read`), stdin EOF
