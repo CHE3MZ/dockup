@@ -50,7 +50,7 @@ jobs:
       - name: diagnose import failure
         if: failure()
         run: |
-          Get-Item $env:TEMP\dockup-debian-*.tar.xz | Select-Object FullName, Length
+          Get-Item $env:TEMP\dockup-* -ErrorAction Continue | Select-Object FullName, Length
           wsl --list --verbose
           Get-ChildItem $env:LOCALAPPDATA\dockup -Recurse -ErrorAction Continue | Select-Object FullName, Length
       - name: doctor after setup

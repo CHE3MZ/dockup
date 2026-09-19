@@ -8,25 +8,32 @@ import (
 )
 
 func TestArchTarName(t *testing.T) {
-	if got := config.ArchTarName("amd64"); got != "debian-12-nocloud-amd64.tar.xz" {
+	if got := config.ArchTarName("amd64"); !strings.Contains(got, "amd64") {
 		t.Fatalf("amd64 tar = %q", got)
 	}
-	if got := config.ArchTarName("arm64"); got != "debian-12-nocloud-arm64.tar.xz" {
+	if got := config.ArchTarName("arm64"); !strings.Contains(got, "arm64") {
 		t.Fatalf("arm64 tar = %q", got)
 	}
 }
 
 func TestDebianURLs(t *testing.T) {
-	u := config.DebianURL("amd64")
-	if !strings.HasPrefix(u, "https://cloud.debian.org/images/cloud/bookworm/latest/") {
+	u := config.RootfsURL("amd64")
+	if !strings.Contains(u, "dist-amd64") || !strings.Contains(u, "bookworm") {
 		t.Fatalf("primary url = %q", u)
 	}
-	if !strings.HasSuffix(u, ".tar.xz") {
+	if !strings.HasSuffix(u, "rootfs.tar.gz") {
 		t.Fatalf("primary url suffix = %q", u)
 	}
-	f := config.FallbackURL("arm64")
-	if !strings.Contains(f, "cdimage.debian.org") {
+	f := config.RootfsFallbackURL("arm64")
+	if !strings.Contains(f, "dist-arm64v8") {
 		t.Fatalf("fallback url = %q", f)
+	}
+	// Compat wrappers follow the same sources.
+	if config.DebianURL("amd64") != u {
+		t.Fatalf("DebianURL compat mismatch")
+	}
+	if config.FallbackURL("arm64") != f {
+		t.Fatalf("FallbackURL compat mismatch")
 	}
 }
 

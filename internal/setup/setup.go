@@ -66,16 +66,17 @@ func Run(arch string) int {
 		}
 	}
 
-	url := config.DebianURL(arch)
-	fallback := config.FallbackURL(arch)
+	url := config.RootfsURL(arch)
+	fallback := config.RootfsFallbackURL(arch)
 	dest := config.TempTar(arch)
+	fallbackDest := config.TempTarFallback(arch)
 	total := download.Size(url)
 	totalMB := download.FormatMB(total)
 	if total < 0 {
 		totalMB = "?"
 	}
 
-	// 1. Download.
+	// 1. Download (primary OCI tar.gz, fallback legacy tar.xz).
 	logx.Info("installing debian... (0/%s mb)", totalMB)
 	if err := download.Fetch(url, dest, func(done, tot int64) {
 		t := tot
@@ -85,7 +86,8 @@ func Run(arch string) int {
 		fmt.Printf("\rinstalling debian... (%s/%s mb)", download.FormatMB(done), download.FormatMB(t))
 	}); err != nil {
 		fmt.Printf("\n")
-		logx.Err("primary download failed: %v — trying mirror", err)
+		logx.Err("primary download failed: %v — trying fallback %s", err, fallback)
+		dest = fallbackDest
 		if err2 := download.Fetch(fallback, dest, nil); err2 != nil {
 			logx.Err("download failed: %v", err2)
 			return 1

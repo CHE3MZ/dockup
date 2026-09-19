@@ -36,38 +36,29 @@
 
 ## 1. Research findings (what we verified before designing)
 
-### 1.1 Debian “nocloud” image — exact URLs
+### 1.1 Debian rootfs — exact URLs (CORRECTED after GH e2e proof)
 
-Base (from live index crawl, Sept 2026):
-
-```text
-https://cloud.debian.org/images/cloud/bookworm/latest/
-```
-
-Relevant files (both `cloud.debian.org` and `cdimage.debian.org` mirror it):
-
-| arch  | file                              | size   |
-|-------|-----------------------------------|--------|
-| amd64 | `debian-12-nocloud-amd64.tar.xz`  | ~252 MB|
-| arm64 | `debian-12-nocloud-arm64.tar.xz`  | ~236–238 MB |
-| both  | `.qcow2` / `.raw` / `.json`       | IGNORE — not for WSL |
-
-Consequences:
-
-- **WSL `--import` needs the `tar.xz`, NOT qcow2/raw.** Modern `wsl.exe`
-  (≥1.1.6, confirmed up to 2.1.5+) imports `.tar`, `.tar.gz`, `.tar.xz`,
-  `.tar.zst` directly. No manual decompression needed.
-- URL shape is stable: `<base>/debian-12-nocloud-<GOARCH>.tar.xz`.
-  `GOARCH amd64 → debian arch amd64`, `arm64 → arm64`. Default = `amd64`.
-  Flags: `--amd` forces amd64, `--arm` forces arm64. If both passed, error out.
-- `DOWNLOADSIZE_INMB` in the setup banner = HTTP `Content-Length` (HEAD request)
-  rendered as MB, plus live `downloaded/total MB` while streaming to disk.
-  Use BITS or `Invoke-WebRequest`-equivalent in Go: plain `net/http` GET with
-  `io.Copy` + progress ticker. No PowerShell dependency.
-- Mirror fallback: if `cloud.debian.org` fails, retry
-  `https://cdimage.debian.org/cdimage/cloud/bookworm/latest/<same filename>`.
-- Temp location: `%TEMP%\dockup-debian-<arch>.tar.xz`, deleted after import
-  (keep on failure for debugging, print path).
+> Correction (2026-09-19, proven by GH `e2e-wsl` run 35456171649):
+> `https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-nocloud-*.tar.xz`
+> is NOT WSL-importable — it contains only a single `disk.raw` partitioned
+> image, so `wsl --import` fails with
+> `Wsl/Service/RegisterDistro/WSL_E_NOT_A_LINUX_DISTRO`.
+> The implementation therefore uses the official Debian rootfs tarballs
+> (same bookworm content, WSL-compatible) from debuerreotype:
+>
+> ```text
+> amd64 primary:  https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-amd64/bookworm/oci/blobs/rootfs.tar.gz
+> amd64 fallback: https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-amd64/bookworm/rootfs.tar.xz
+> arm64 primary:  https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-arm64v8/bookworm/oci/blobs/rootfs.tar.gz
+> arm64 fallback: https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-arm64v8/bookworm/rootfs.tar.xz
+> ```
+>
+> Branch mapping: `amd64 → dist-amd64`, `arm64 → dist-arm64v8`.
+> This keeps revision.md's UX (default amd64, `--amd`/`--arm`, `DOWNLOADSIZE_INMB`
+> banner, `%TEMP%` transient file) while making setup actually work.
+> Original nocloud URLs are documented here for reference only:
+> `https://cloud.debian.org/images/cloud/bookworm/latest/` (~252 MB amd64 /
+> ~238 MB arm64 `.tar.xz`) + `cdimage.debian.org` mirror.
 
 ### 1.2 `wsl.exe --import` contract
 

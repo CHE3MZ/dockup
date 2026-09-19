@@ -13,10 +13,12 @@ const (
 	// Mirrors Docker Desktop so stock docker.exe works with no -H flag.
 	PipeName = `\\.\pipe\docker_engine`
 
-	// DebianBookwormBase is the primary nocloud rootfs index.
-	DebianBookwormBase = "https://cloud.debian.org/images/cloud/bookworm/latest"
-	// DebianFallbackBase mirrors the same files when the primary is down.
-	DebianFallbackBase = "https://cdimage.debian.org/cdimage/cloud/bookworm/latest"
+	// RootfsBase hosts the official Debian rootfs tarballs (debuerreotype).
+	// NOTE: revision.md names cloud nocloud tarballs, but those contain only
+	// disk.raw and fail `wsl --import` with WSL_E_NOT_A_LINUX_DISTRO
+	// (proven in GH e2e). The debuerreotype rootfs tarballs below are the
+	// official Debian root filesystems (same bookworm content) and import cleanly.
+	RootfsBase = "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts"
 
 	// Version is overridden at build time via -ldflags -X.
 	Version = "dev"
@@ -25,20 +27,37 @@ const (
 	MaxLogBytes = 5 << 20 // 5 MB
 )
 
-// ArchTarName maps "amd64"/"arm64" to the nocloud tarball filename.
+// DistBranch maps amd64/arm64 to debuerreotype branch names.
+func DistBranch(arch string) string {
+	if arch == "arm64" {
+		return "dist-arm64v8"
+	}
+	return "dist-amd64"
+}
+
+// RootfsURL returns the primary WSL-importable rootfs URL (OCI tar.gz layout).
+func RootfsURL(arch string) string {
+	return RootfsBase + "/" + DistBranch(arch) + "/bookworm/oci/blobs/rootfs.tar.gz"
+}
+
+// RootfsFallbackURL returns the legacy top-level rootfs tarball URL.
+func RootfsFallbackURL(arch string) string {
+	return RootfsBase + "/" + DistBranch(arch) + "/bookworm/rootfs.tar.xz"
+}
+
+// ArchTarName is kept for display purposes.
 func ArchTarName(arch string) string {
-	return "debian-12-nocloud-" + arch + ".tar.xz"
+	if arch == "arm64" {
+		return "rootfs-arm64v8-bookworm.tar.gz"
+	}
+	return "rootfs-amd64-bookworm.tar.gz"
 }
 
-// DebianURL returns the primary download URL for an arch.
-func DebianURL(arch string) string {
-	return DebianBookwormBase + "/" + ArchTarName(arch)
-}
+// DebianURL kept for backward-compat; returns the primary rootfs URL.
+func DebianURL(arch string) string { return RootfsURL(arch) }
 
-// FallbackURL returns the mirror download URL for an arch.
-func FallbackURL(arch string) string {
-	return DebianFallbackBase + "/" + ArchTarName(arch)
-}
+// FallbackURL kept for backward-compat; returns the legacy rootfs URL.
+func FallbackURL(arch string) string { return RootfsFallbackURL(arch) }
 
 // NormalizeArch maps user flags to debian arch names.
 // Empty means default (amd64). Returns error string empty on success.
@@ -82,7 +101,12 @@ func WslInstallDir() string {
 	return filepath.Join(home, "AppData", "Local", "dockup", "wsl")
 }
 
-// TempTar is the transient download path for an arch.
+// TempTar is the transient download path for an arch (primary .tar.gz).
 func TempTar(arch string) string {
-	return filepath.Join(os.TempDir(), "dockup-debian-"+arch+".tar.xz")
+	return filepath.Join(os.TempDir(), "dockup-rootfs-"+arch+".tar.gz")
+}
+
+// TempTarFallback is the transient path for the legacy .tar.xz fallback.
+func TempTarFallback(arch string) string {
+	return filepath.Join(os.TempDir(), "dockup-rootfs-"+arch+".tar.xz")
 }
