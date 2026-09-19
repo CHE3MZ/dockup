@@ -144,7 +144,7 @@ func cmdSetup(cfg userconfig.Config, args []string) int {
 }
 
 func usage() {
-	fmt.Print(ui.Header("dockup") + ui.White(" — docker engine in a dedicated WSL distro (Windows only)\n") + `
+	fmt.Print(ui.Header("dockup") + ui.White(" — docker engine in a dedicated WSL distro.\n") + `
 ` + ui.LightBlue("Usage:") + `
   ` + ui.Bold("dockup") + `                  foreground run (Ctrl+C to stop)
   ` + ui.Bold("dockup setup [--amd|--arm] [--path=DIR] [--dry-run]") + `
