@@ -76,7 +76,7 @@ jobs:
           .\dockup.exe doctor
       - name: self-heal — break the engine
         run: |
-          wsl -d dockup -u root -- systemctl stop docker.service
+          wsl -d dockup -u root -- systemctl stop docker.service docker.socket
           Start-Sleep 3
           wsl -d dockup -u root -- docker version --format '{{.Server.Version}}' | Out-Null
           if ($LASTEXITCODE -eq 0) { throw 'engine should be down after stop' }
