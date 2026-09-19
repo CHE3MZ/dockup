@@ -47,7 +47,7 @@ jobs:
           if ($cg -notmatch '2') { throw "cgroup version = $cg" }
       - name: distro audit — config files and kernel features
         run: |
-          $wc = wsl -d dockup -u root -- cat /etc/wsl.conf
+          $wc = (wsl -d dockup -u root -- cat /etc/wsl.conf) -join "`n"
           if ($wc -notmatch 'systemd=true') { throw "wsl.conf = $wc" }
           wsl -d dockup -u root -- test -f /etc/apt/sources.list.d/docker.list
           if ($LASTEXITCODE -ne 0) { throw 'docker apt source missing' }
