@@ -168,7 +168,7 @@ func cmdSetup(cfg userconfig.Config, args []string) int {
 func usage() {
 	fmt.Print(ui.Header("dockup") + ui.White(" — docker engine in a dedicated WSL distro.\n") + `
 ` + ui.LightBlue("Usage:") + `
-  ` + ui.Bold("dockup") + `                    Foreground run (Ctrl+C to stop)
+  ` + ui.Bold("dockup") + `                     Foreground run (Ctrl+C to stop)
   ` + ui.Bold("dockup setup") + `               Launch the interactive setup wizard
   ` + ui.Bold("dockup uninstall") + `           Uninstall the dockup distro from WSL
   ` + ui.Bold("dockup ps") + `                  Show dockup's status
@@ -333,7 +333,7 @@ func foreground(cfg userconfig.Config) int {
 	pipe := cfg.EffectivePipe()
 	s, _ := state.Load()
 	if !s.Installed && !wsl.Exists(config.DistroName) {
-		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
+		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up. run "dockup help" to see all available commands.`))
 		return 1
 	}
 	if s.Daemon.PID != 0 && daemon.DaemonAlive(s) {
