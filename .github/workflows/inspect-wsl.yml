@@ -80,6 +80,7 @@ jobs:
           Start-Sleep 3
           wsl -d dockup -u root -- docker version --format '{{.Server.Version}}' | Out-Null
           if ($LASTEXITCODE -eq 0) { throw 'engine should be down after stop' }
+          exit 0
       - name: self-heal — doctor --fix restores it
         timeout-minutes: 15
         run: |
