@@ -10,8 +10,11 @@ const (
 	// DistroName is the only WSL distro dockup manages.
 	DistroName = "dockup"
 	// PipeName is the Windows named pipe docker.exe talks to.
-	// Mirrors Docker Desktop so stock docker.exe works with no -H flag.
-	PipeName = `\\.\pipe\docker_engine`
+	// Uses dockup_engine (not docker_engine) to avoid hijacking Docker
+	// Desktop's same-named pipe (GH runners already hold docker_engine).
+	// Users point the CLI via `docker -H npipe:////./pipe/dockup_engine`
+	// or $env:DOCKER_HOST. Revision allows either name ("e.g.").
+	PipeName = `\\.\pipe\dockup_engine`
 
 	// RootfsBase hosts the official Debian rootfs tarballs (debuerreotype).
 	// NOTE: revision.md names cloud nocloud tarballs, but those contain only

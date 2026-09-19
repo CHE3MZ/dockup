@@ -9,7 +9,7 @@ import (
 )
 
 // PipeName stub for non-Windows builds.
-const PipeName = `\\.\pipe\docker_engine`
+const PipeName = `\\.\pipe\dockup_engine`
 
 var errWindowsOnly = errors.New("dockup is Windows-only")
 

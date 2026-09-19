@@ -93,6 +93,7 @@ func Start() error {
 	}
 	s, _ := state.Load()
 	logx.Info("dockup started (daemon pid %d, pipe %s)", s.Daemon.PID, config.PipeName)
+	logx.Info("use: docker -H npipe:////./pipe/dockup_engine version")
 	return nil
 }
 

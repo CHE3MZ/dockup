@@ -152,9 +152,11 @@ systemctl enable --now containerd docker
   One short-lived `wsl.exe` per API connection (~0.2–0.5 s) is fine.
 - In Go: `github.com/Microsoft/go-winio`:
   `winio.ListenPipe(path, nil)` server, `winio.DialPipe(path, &timeout)` for
-  health checks. `PipeName = \\.\pipe\docker_engine` (compat so stock
-  `docker.exe` works with zero `-H` flags; revision also allows
-  `\\.\pipe\dockup_engine` — we standardize on `docker_engine` and document it).
+  health checks. `PipeName = \\.\pipe\dockup_engine` (NOT `docker_engine`:
+  GH runners + user machines already hold Docker Desktop's `docker_engine`
+  pipe, proven in e2e — hijacking it would be a false pass. Revision allows
+  either name, "e.g. \\.\pipe\dockup_engine or mirroring...". Clients use
+  `docker -H npipe:////./pipe/dockup_engine`).
 - TTY resize: no special code needed — resize is just another Engine API POST
   (`/containers/.../resize?h=&w=`) multiplexed over the same hijacked stream;
   raw copy forwards it. Do NOT attempt to parse it.
@@ -433,9 +435,10 @@ and use `gh workflow run` friendly names (`ci`, `e2e-wsl`).
    directly importable. qcow2/raw are for QEMU, useless for `wsl --import`.
 2. **TCP removed:** old code proved WSL2 NAT loopback can’t reach distro
    `127.0.0.1` binds; STDIO bridge is the only design. No `--port` flag ever.
-3. **Pipe name:** `\\.\pipe\docker_engine` (not `dockup_engine`) so stock
-   `docker.exe` works with no `-H`/`DOCKER_HOST`. Documented; `dockup ps`
-   warns on foreign holder (Docker Desktop) instead of hijacking.
+3. **Pipe name:** `\\.\pipe\dockup_engine` to avoid hijacking Docker
+   Desktop's `docker_engine` pipe (GH runners prove the collision is real).
+   Clients use `docker -H npipe:////./pipe/dockup_engine`; `dockup ps`/
+   `doctor` report foreign `docker_engine` holders instead of hijacking.
 4. **arm64 Windows binary:** out of scope — only the *payload* has an arm
    variant (`--arm` downloads arm64 rootfs). Windows exe stays amd64.
 5. **systemd reboot:** one `wsl --terminate dockup` is required after writing

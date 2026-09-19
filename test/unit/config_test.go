@@ -56,7 +56,7 @@ func TestNormalizeArch(t *testing.T) {
 }
 
 func TestPipeName(t *testing.T) {
-	if config.PipeName != `\\.\pipe\docker_engine` {
+	if config.PipeName != `\\.\pipe\dockup_engine` {
 		t.Fatalf("pipe = %q", config.PipeName)
 	}
 	if config.DistroName != "dockup" {

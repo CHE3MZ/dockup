@@ -129,6 +129,7 @@ func foreground() int {
 		return 1
 	}
 	fmt.Printf("helper up and running on %s\n", config.PipeName)
+	fmt.Printf("use: docker -H npipe:////./pipe/dockup_engine version\n")
 	fmt.Printf("dockup running in foreground (Ctrl+C to stop)...\n")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
