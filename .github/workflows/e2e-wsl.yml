@@ -115,21 +115,39 @@ jobs:
       - name: dockup doctor (post-setup)
         run: .\dockup.exe doctor
 
+      - name: In-distro engine check (discriminates dockerd vs relay faults)
+        run: |
+          wsl -d Debian -u root -- test -S /var/run/docker.sock
+          if ($LASTEXITCODE -ne 0) { throw 'no dockerd socket in distro after setup' }
+          wsl -d Debian -u root -- docker version --format '{{.Server.Version}}'
+          if ($LASTEXITCODE -ne 0) { throw 'dockerd not answering in distro after setup' }
+
       - name: Foreground run serves, external shutdown tears down
         run: |
+          $env:DOCKUP_DEBUG = '1'
           $proc = Start-Process -FilePath "$PWD\dockup.exe" -ArgumentList @('-d','Debian') -NoNewWindow -PassThru -RedirectStandardOutput 'fg.out.log' -RedirectStandardError 'fg.err.log'
           $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
           $ok = $false
-          for ($i = 1; $i -le 30; $i++) {
+          $deadline = (Get-Date).AddSeconds(200)
+          $i = 0
+          while ((Get-Date) -lt $deadline) {
+            $i++
             docker version >$null 2>$null
             if ($LASTEXITCODE -eq 0) { $ok = $true; break }
             if ($proc.HasExited) { break }
+            if ($i % 6 -eq 0) {
+              Write-Host "--- poll $i, fg tail ---"
+              Get-Content 'fg.out.log' -Tail 4 -ErrorAction SilentlyContinue
+              Get-Content 'fg.err.log' -Tail 6 -ErrorAction SilentlyContinue
+            }
             Start-Sleep -Seconds 5
           }
           Write-Host '--- foreground stdout ---'
           Get-Content 'fg.out.log' -ErrorAction SilentlyContinue
           Write-Host '--- foreground stderr ---'
           Get-Content 'fg.err.log' -ErrorAction SilentlyContinue
+          Write-Host '--- in-distro post-mortem ---'
+          wsl -d Debian -u root -- docker version --format '{{.Server.Version}}'
           if (-not $ok) {
             .\dockup.exe shutdown 2>$null
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue

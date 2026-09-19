@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"time"
 
@@ -22,6 +23,15 @@ import (
 )
 
 const PipeName = `\\.\pipe\docker_engine`
+
+// Diagnostics go to STDERR only (never protocol bytes, never STDOUT).
+// Verbose per-bridge tracing is opt-in via DOCKUP_DEBUG=1; spawn failures
+// always log (a silent bridge is undebuggable).
+func dbg(format string, a ...any) {
+	if os.Getenv("DOCKUP_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "relay: "+format+"\n", a...)
+	}
+}
 
 // Alive dials the pipe with a short timeout. True = a relay already holds
 // the name (ours or foreign — callers must check state before attaching).
@@ -78,20 +88,26 @@ func Serve(ctx context.Context, distro string) error {
 // EOF on either side tears the whole bridge down; the process is reaped.
 func bridgeConn(pipe net.Conn, distro string) {
 	defer pipe.Close()
+	start := time.Now()
+	dbg("bridge accepted")
 	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--",
 		"socat", "STDIO", "UNIX-CONNECT:/var/run/docker.sock")
 	toProc, err := cmd.StdinPipe()
 	if err != nil {
+		fmt.Fprintln(os.Stderr, "relay: stdin pipe:", err)
 		return
 	}
 	fromProc, err := cmd.StdoutPipe()
 	if err != nil {
+		fmt.Fprintln(os.Stderr, "relay: stdout pipe:", err)
 		return
 	}
 	cmd.Stderr = nil // socat chatter stays out of the API stream.
 	if err := cmd.Start(); err != nil {
+		fmt.Fprintln(os.Stderr, "relay: wsl spawn:", err)
 		return
 	}
+	dbg("bridge wsl pid %d", cmd.Process.Pid)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -99,6 +115,7 @@ func bridgeConn(pipe net.Conn, distro string) {
 		_ = toProc.Close() // EOF downstream so socat can exit.
 	}()
 	_, _ = io.Copy(pipe, fromProc)
-	_ = cmd.Wait()
+	werr := cmd.Wait()
 	<-done
+	dbg("bridge done in %s (wait=%v)", time.Since(start).Round(time.Millisecond), werr)
 }
