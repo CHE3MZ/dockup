@@ -13,6 +13,7 @@ jobs:
           Invoke-RestMethod get.scoop.sh | Invoke-Expression
       - name: scoop install docker CLI
         run: |
+          $env:Path = "$env:USERPROFILE\scoop\shims;$env:Path"
           scoop install docker
           "$env:USERPROFILE\scoop\shims" | Out-File -Append $env:GITHUB_PATH
       - name: verify scoop docker CLI
@@ -30,6 +31,7 @@ jobs:
         run: echo y | .\dockup.exe setup --amd
       - name: diagnose setup failure
         if: failure()
+        continue-on-error: true
         run: |
           Get-Item $env:TEMP\dockup-* -ErrorAction Continue | Select-Object FullName, Length
           wsl --list --verbose

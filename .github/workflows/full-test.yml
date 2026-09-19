@@ -55,6 +55,7 @@ jobs:
           if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
       - name: diagnose setup failure
         if: failure()
+        continue-on-error: true
         run: |
           Get-Item $env:TEMP\dockup-* -ErrorAction Continue | Select-Object FullName, Length
           wsl --list --verbose
