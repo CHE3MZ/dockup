@@ -16,6 +16,7 @@ import (
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/userconfig"
 	"golang.org/x/sys/windows"
 )
 
@@ -43,12 +44,14 @@ func DaemonAlive(s state.State) bool {
 
 // Start spawns detached `dockup __serve` and waits for the pipe.
 func Start() error {
+	ucfg, _ := userconfig.Load()
+	pipe := ucfg.WithDefaults().EffectivePipe()
 	var startErr error
 	err := state.WithLock(func(s *state.State) error {
 		if !s.Installed {
 			return fmt.Errorf("dockup has not been setup yet run \"dockup setup\" to set it up")
 		}
-		if relay.Alive() && s.Daemon.PID == 0 {
+		if relay.AliveOn(pipe) && s.Daemon.PID == 0 {
 			return fmt.Errorf("dockup is already running as a foreground process, ctrl + C it to stop it and re-run")
 		}
 		if s.Daemon.PID != 0 {
@@ -83,16 +86,19 @@ func Start() error {
 	if err != nil {
 		return err
 	}
-	if !relay.WaitAlive(15 * time.Second) {
+	if !relay.WaitAliveOn(pipe, 15*time.Second) {
 		_ = state.WithLock(func(s *state.State) error {
 			s.Daemon = state.Daemon{}
 			return nil
 		})
-		startErr = fmt.Errorf("helper failed to come up (pipe %s never answered)", config.PipeName)
+		startErr = fmt.Errorf("helper failed to come up (pipe %s never answered)", pipe)
 		return startErr
 	}
 	s, _ := state.Load()
-	logx.Info("dockup started (daemon pid %d, pipe %s)", s.Daemon.PID, config.PipeName)
+	logx.Ok("dockup started (daemon pid %d, pipe %s)", s.Daemon.PID, pipe)
+	if ucfg.WithDefaults().UseTCP {
+		logx.Info("tcp bridge on %s", ucfg.WithDefaults().TCPAddr())
+	}
 	logx.Info("use: docker -H npipe:////./pipe/dockup_engine version")
 	return nil
 }
@@ -122,8 +128,9 @@ func Stop() error {
 		return err
 	}
 	if pid != 0 {
-		relay.WaitDead(10 * time.Second)
-		logx.Info("dockup stopped")
+		ucfg2, _ := userconfig.Load()
+		relay.WaitDeadOn(ucfg2.WithDefaults().EffectivePipe(), 10*time.Second)
+		logx.Ok("dockup stopped")
 	}
 	return nil
 }
@@ -131,20 +138,30 @@ func Stop() error {
 // Status prints brief health. Returns 0 running, 1 stopped.
 func Status() int {
 	s, _ := state.Load()
-	alive := relay.Alive()
+	ucfg, _ := userconfig.Load()
+	ucfg = ucfg.WithDefaults()
+	alive := relay.AliveOn(ucfg.EffectivePipe())
 	daemonUp := processAlive(s.Daemon.PID)
+	tcpNote := ""
+	if ucfg.UseTCP {
+		if relay.TCPAlive(ucfg.TCPAddr()) {
+			tcpNote = ", tcp " + ucfg.TCPAddr() + " ok"
+		} else {
+			tcpNote = ", tcp " + ucfg.TCPAddr() + " down"
+		}
+	}
 	switch {
 	case daemonUp && alive:
-		logx.Info("running (daemon pid %d, pipe ok)", s.Daemon.PID)
+		logx.Ok("running (daemon pid %d, pipe ok%s)", s.Daemon.PID, tcpNote)
 		return 0
 	case alive && s.Installed && s.Daemon.PID == 0:
-		logx.Info("running (foreground process holds the pipe)")
+		logx.Info("running (foreground process holds the pipe%s)", tcpNote)
 		return 0
 	case alive && !s.Installed:
 		logx.Info("stopped (pipe held by another program, not dockup)")
 		return 1
 	case s.Installed && alive:
-		logx.Info("running (pipe alive, owner unknown)")
+		logx.Info("running (pipe alive, owner unknown%s)", tcpNote)
 		return 0
 	default:
 		if s.Daemon.PID != 0 && !daemonUp {

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,8 +15,18 @@ import (
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/ui"
+	"github.com/CHE3MZ/dockup/internal/userconfig"
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
+
+// Options configures a setup run.
+type Options struct {
+	Arch   string
+	Path   string // --path flag ("" = interactive with default prefilled)
+	DryRun bool
+	Cfg    userconfig.Config
+}
 
 func askYesNo(prompt string) bool {
 	fmt.Printf("%s [y/n]\n", prompt)
@@ -33,21 +44,53 @@ func askRetryAbort() bool {
 	return line == "retry" || line == "r" || line == "y" || line == "yes"
 }
 
+// askInstallPath prompts with the stored default prefilled: empty input keeps
+// the default, any other input replaces it (and becomes the new default on
+// success). --path skips this entirely.
+func askInstallPath(cfg userconfig.Config, flagPath string) (string, error) {
+	if strings.TrimSpace(flagPath) != "" {
+		return userconfig.ResolveInstallDir(flagPath, cfg)
+	}
+	def, err := userconfig.ResolveInstallDir("", cfg)
+	if err != nil {
+		def = filepath.FromSlash(cfg.DefaultPath)
+	}
+	fmt.Printf("%s\n", ui.White("where do you want to install the dockup distro?"))
+	fmt.Printf("%s ", ui.Gray(fmt.Sprintf("enter path e.g D:/WSL [default: %s]:", filepath.ToSlash(def))))
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
+	if strings.TrimSpace(line) == "" {
+		return def, nil
+	}
+	return userconfig.ResolveInstallDir(line, cfg)
+}
+
 // Run executes the full setup flow for arch (amd64|arm64).
 func Run(arch string) int {
+	cfg, _ := userconfig.Ensure()
+	return RunEx(Options{Arch: arch, Cfg: cfg.WithDefaults()})
+}
+
+// RunEx executes setup with path/dry-run support.
+func RunEx(o Options) int {
+	arch := o.Arch
+	cfg := o.Cfg.WithDefaults()
 	if arch != "amd64" && arch != "arm64" {
 		logx.Err("unknown arch %q", arch)
 		return 1
 	}
 	// Already installed?
 	if wsl.Exists(config.DistroName) {
-		fmt.Printf("Warning : An installation of dockup already exists on WSL, do you wish to delete that installation and let dockup re-install a new dockup instance on WSL ? [y/n]\n")
+		fmt.Printf("%s\n", ui.Yellow(fmt.Sprintf("Warning : An installation of dockup already exists on WSL, do you wish to delete that installation and let dockup re-install a new dockup instance on WSL ? [y/n]")))
 		r := bufio.NewReader(os.Stdin)
 		line, _ := r.ReadString('\n')
 		line = strings.ToLower(strings.TrimSpace(line))
 		if line != "y" && line != "yes" {
 			logx.Info("aborted")
 			return 0
+		}
+		if o.DryRun {
+			return dryRunPlan(arch, cfg, "<existing distro would be unregistered>")
 		}
 		logx.Info("removing old dockup distro...")
 		_ = wsl.Unregister(config.DistroName)
@@ -66,10 +109,20 @@ func Run(arch string) int {
 		}
 	}
 
+	installDir, err := askInstallPath(cfg, o.Path)
+	if err != nil {
+		logx.Err("%v", err)
+		return 1
+	}
+
 	url := config.RootfsURL(arch)
 	fallback := config.RootfsFallbackURL(arch)
 	dest := config.TempTar(arch)
 	fallbackDest := config.TempTarFallback(arch)
+
+	if o.DryRun {
+		return dryRunPlan(arch, cfg, installDir)
+	}
 	total := download.Size(url)
 	totalMB := download.FormatMB(total)
 	if total < 0 {
@@ -97,7 +150,7 @@ func Run(arch string) int {
 
 	// 2. Import.
 	logx.Info("importing debian into WSL as \"dockup\"... (0%%)")
-	if err := os.MkdirAll(config.WslInstallDir(), 0o755); err != nil {
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		logx.Err("mkdir wsl dir: %v", err)
 		return 1
 	}
@@ -107,7 +160,7 @@ func Run(arch string) int {
 		logx.Err("download missing at %s: %v", dest, err)
 		return 1
 	}
-	if err := wsl.Import(config.DistroName, config.WslInstallDir(), dest); err != nil {
+	if err := wsl.Import(config.DistroName, installDir, dest); err != nil {
 		logx.Err("import failed: %v", err)
 		return 1
 	}
@@ -163,7 +216,7 @@ func Run(arch string) int {
 	// 7. Bridge test (ephemeral relay is implicitly covered by pipe check;
 	// full bridge verified on first foreground/daemon start).
 	logx.Info("testing the docker daemon bridge... (0%%)")
-	if relay.Alive() {
+	if relay.AliveOn(cfg.EffectivePipe()) {
 		logx.Info("note: pipe already held (another dockup running?)")
 	}
 	logx.Info("test results : success")
@@ -174,9 +227,47 @@ func Run(arch string) int {
 		s.SetupAt = time.Now().UTC().Format(time.RFC3339)
 		return nil
 	})
+	// Remember the used path as both default (prefilled next time) and
+	// current (where dockup looks for the distro).
+	cfg.DefaultPath = filepath.ToSlash(installDir)
+	cfg.CurrentPath = filepath.ToSlash(installDir)
+	_ = userconfig.Save(cfg)
 	_ = os.Remove(dest)
-	logx.Info("you're all good to go ! run \"dockup\" to start a foreground process or \"dockup daemon start\" to start a background daemon process.")
+	_ = os.Remove(fallbackDest)
+	logx.Ok("you're all good to go ! run \"dockup\" to start a foreground process or \"dockup daemon start\" to start a background daemon process.")
 	return 0
+}
+
+// dryRunPlan prints what setup would do without changing anything.
+func dryRunPlan(arch string, cfg userconfig.Config, installDir string) int {
+	fmt.Print(ui.Header("dockup setup --dry-run") + "\n")
+	ui.Printf("arch: %s", arch)
+	ui.Printf("distro name: %s", config.DistroName)
+	ui.Printf("install dir: %s", installDir)
+	ui.Printf("download: %s", config.RootfsURL(arch))
+	ui.Printf("fallback: %s", config.RootfsFallbackURL(arch))
+	ui.Printf("config: %s", userconfig.File())
+	ui.Printf("pipe: %s", cfg.EffectivePipe())
+	if cfg.UseTCP {
+		ui.Printf("tcp: %s (enabled)", cfg.TCPAddr())
+	} else {
+		ui.Printf("tcp: disabled (set use_tcp=true in config to enable)")
+	}
+	ui.Hint("dry run complete — nothing was downloaded, imported, or changed.")
+	return 0
+}
+
+// currentInstallDir returns where the distro lives: stored current_path,
+// falling back to the legacy default for pre-config installs.
+func currentInstallDir() string {
+	cfg, _ := userconfig.Load()
+	cfg = cfg.WithDefaults()
+	if strings.TrimSpace(cfg.CurrentPath) != "" {
+		if p, err := userconfig.NormalizePath(cfg.CurrentPath); err == nil {
+			return filepath.FromSlash(p)
+		}
+	}
+	return config.WslInstallDir()
 }
 
 // Uninstall removes the distro after confirmation.
@@ -195,7 +286,13 @@ func Uninstall() int {
 		*s = state.State{}
 		return nil
 	})
-	_ = os.RemoveAll(config.WslInstallDir())
-	logx.Info("dockup uninstalled")
+	_ = os.RemoveAll(currentInstallDir())
+	// Keep default_path for the next setup, clear current_path.
+	if cfg, err := userconfig.Load(); err == nil {
+		cfg = cfg.WithDefaults()
+		cfg.CurrentPath = ""
+		_ = userconfig.Save(cfg)
+	}
+	logx.Ok("dockup uninstalled")
 	return 0
 }

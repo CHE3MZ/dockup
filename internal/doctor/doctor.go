@@ -11,16 +11,47 @@ import (
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/userconfig"
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
 // Run checks everything, repairs stale daemon PIDs, reports fixed vs attention.
 func Run() error {
 	fail := 0
-	ok := func(name string) { logx.Info("ok: %s", name) }
+	ok := func(name string) { logx.Ok("ok: %s", name) }
 	bad := func(name, hint string) {
 		fail++
 		logx.Err("fail: %s — %s", name, hint)
+	}
+
+	// User config (~/.dockup/config.json)?
+	ucfg, err := userconfig.Load()
+	if err != nil {
+		bad("config file", fmt.Sprintf("%s is corrupt: %v", userconfig.File(), err))
+	} else {
+		ucfg = ucfg.WithDefaults()
+		ok(fmt.Sprintf("config file %s", userconfig.File()))
+		if _, err := userconfig.NormalizePath(ucfg.DefaultPath); err != nil {
+			bad("default_path", err.Error())
+		} else {
+			ok(fmt.Sprintf("default_path %s", ucfg.DefaultPath))
+		}
+		if ucfg.CurrentPath != "" {
+			if _, err := userconfig.NormalizePath(ucfg.CurrentPath); err != nil {
+				bad("current_path", err.Error())
+			} else {
+				ok(fmt.Sprintf("current_path %s", ucfg.CurrentPath))
+			}
+		} else {
+			logx.Info("info: current_path empty (no distro installed)")
+		}
+		if err := userconfig.ValidatePort(ucfg.EffectivePort()); err != nil {
+			bad("port", err.Error())
+		} else if ucfg.UseTCP {
+			ok(fmt.Sprintf("tcp bridge %s enabled", ucfg.TCPAddr()))
+		} else {
+			logx.Info("info: tcp bridge disabled (port %d reserved)", ucfg.EffectivePort())
+		}
 	}
 
 	// WSL present?
@@ -61,14 +92,27 @@ func Run() error {
 		}
 	}
 	// Pipe? Distinguish ours vs foreign (e.g. Docker Desktop preinstalled on GH runners).
-	if relay.Alive() {
+	pipe := config.PipeName
+	if c, lerr := userconfig.Load(); lerr == nil {
+		pipe = c.WithDefaults().EffectivePipe()
+	}
+	if relay.AliveOn(pipe) {
 		if s.Installed {
-			ok("pipe " + config.PipeName + " alive")
+			ok("pipe " + pipe + " alive")
 		} else {
-			logx.Info("info: pipe %s held by another program (not dockup) — stop it before running dockup", config.PipeName)
+			logx.Info("info: pipe %s held by another program (not dockup) — stop it before running dockup", pipe)
 		}
 	} else {
-		logx.Info("info: pipe %s not held (dockup stopped)", config.PipeName)
+		logx.Info("info: pipe %s not held (dockup stopped)", pipe)
+	}
+	// TCP bridge?
+	if c, lerr := userconfig.Load(); lerr == nil && c.WithDefaults().UseTCP {
+		addr := c.WithDefaults().TCPAddr()
+		if relay.TCPAlive(addr) {
+			ok("tcp " + addr + " alive")
+		} else {
+			logx.Info("info: tcp %s not held (dockup stopped or tcp starting)", addr)
+		}
 	}
 	// docker CLI on Windows?
 	if _, err := exec.LookPath("docker.exe"); err != nil {
@@ -77,7 +121,7 @@ func Run() error {
 		ok("docker.exe on PATH")
 	}
 	// Stale daemon pid repair.
-	if s.Daemon.PID != 0 && !relay.Alive() {
+	if s.Daemon.PID != 0 && !relay.AliveOn(pipe) {
 		proc, err := os.FindProcess(s.Daemon.PID)
 		_ = proc
 		_ = err
@@ -89,6 +133,14 @@ func Run() error {
 			return nil
 		})
 		logx.Info("fixed: cleared stale daemon pid %d", s.Daemon.PID)
+	}
+	// Stale current_path repair: distro gone but config still points at it.
+	if !wsl.Exists(config.DistroName) {
+		if c, lerr := userconfig.Load(); lerr == nil && c.CurrentPath != "" {
+			c.CurrentPath = ""
+			_ = userconfig.Save(c.WithDefaults())
+			logx.Info("fixed: cleared stale current_path")
+		}
 	}
 	if fail > 0 {
 		return fmt.Errorf("%d critical check(s) failed", fail)

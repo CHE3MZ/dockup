@@ -1,0 +1,107 @@
+name: full-test
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  full:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: vet
+        run: go vet ./...
+      - name: unit tests
+        run: go test ./...
+      - name: build
+        run: go build -o dockup.exe ./cmd/dockup
+      - name: help for every command
+        run: |
+          .\dockup.exe --help
+          .\dockup.exe -h
+          .\dockup.exe help
+          .\dockup.exe help setup
+          .\dockup.exe setup --help
+          .\dockup.exe setup -h
+          .\dockup.exe uninstall --help
+          .\dockup.exe ps --help
+          .\dockup.exe daemon --help
+          .\dockup.exe shutdown --help
+          .\dockup.exe doctor --help
+          .\dockup.exe version
+      - name: dry run changes nothing
+        run: |
+          echo y | .\dockup.exe setup --dry-run
+          $list = wsl --list --quiet
+          if ($list -match 'dockup') { throw 'dry-run created a distro' }
+      - name: config file created with bare minimum
+        run: |
+          .\dockup.exe version
+          $p = "$env:USERPROFILE\.dockup\config.json"
+          if (!(Test-Path $p)) { throw 'config.json not created' }
+          $c = Get-Content $p -Raw | ConvertFrom-Json
+          if (!$c.default_path) { throw 'default_path missing' }
+          if ($c.port -ne 2375) { throw "port = $($c.port)" }
+          if ($c.use_tcp -ne $false) { throw 'use_tcp should default false' }
+          if (!$c.pipe_name) { throw 'pipe_name missing' }
+      - name: setup with custom path
+        run: echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
+      - name: config paths follow custom install
+        run: |
+          $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
+          if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path = $($c.default_path)" }
+          if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
+      - name: diagnose setup failure
+        if: failure()
+        run: |
+          Get-Item $env:TEMP\dockup-* -ErrorAction Continue | Select-Object FullName, Length
+          wsl --list --verbose
+          Get-ChildItem C:\dockup-fulltest-wsl -Recurse -ErrorAction Continue | Select-Object FullName, Length
+      - name: doctor after setup
+        run: .\dockup.exe doctor
+      - name: daemon start
+        run: .\dockup.exe daemon start
+      - name: daemon status
+        run: .\dockup.exe daemon status
+      - name: docker version via pipe
+        run: docker -H npipe:////./pipe/dockup_engine version
+      - name: hello-world via pipe
+        timeout-minutes: 5
+        run: docker -H npipe:////./pipe/dockup_engine run --rm hello-world
+      - name: enable TCP on custom port
+        run: |
+          $p = "$env:USERPROFILE\.dockup\config.json"
+          $c = Get-Content $p -Raw | ConvertFrom-Json
+          $c.use_tcp = $true
+          $c.port = 2376
+          $c | ConvertTo-Json | Set-Content $p
+          .\dockup.exe daemon restart
+          .\dockup.exe doctor
+      - name: docker version via custom TCP port
+        run: docker -H tcp://127.0.0.1:2376 version
+      - name: hello-world via custom TCP port
+        timeout-minutes: 5
+        run: docker -H tcp://127.0.0.1:2376 run --rm hello-world
+      - name: disable TCP again
+        run: |
+          $p = "$env:USERPROFILE\.dockup\config.json"
+          $c = Get-Content $p -Raw | ConvertFrom-Json
+          $c.use_tcp = $false
+          $c.port = 2375
+          $c | ConvertTo-Json | Set-Content $p
+          .\dockup.exe daemon restart
+          .\dockup.exe daemon status
+      - name: daemon stop
+        run: .\dockup.exe daemon stop
+      - name: shutdown
+        run: .\dockup.exe shutdown
+      - name: uninstall keeps default path
+        run: |
+          echo y | .\dockup.exe uninstall
+          $list = wsl --list --quiet
+          if ($list -match 'dockup') { throw 'distro still present after uninstall' }
+          $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
+          if ($c.current_path) { throw "current_path not cleared: $($c.current_path)" }
+          if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path not retained: $($c.default_path)" }

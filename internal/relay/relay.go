@@ -1,12 +1,14 @@
 //go:build windows
 
-// Package relay serves \\.\pipe\docker_engine (go-winio). Each accepted
-// client gets a private in-distro bridge:
+// Package relay serves the dockup named pipe (go-winio) and, when enabled in
+// ~/.dockup/config.json, an additional 127.0.0.1-only TCP bridge. Each
+// accepted client (pipe or TCP) gets a private in-distro bridge:
 //
 //	wsl -d dockup -u root -- socat STDIO UNIX-CONNECT:/var/run/docker.sock
 //
-// Raw byte-copy supports HTTP hijack (run -it, logs -f, exec). No TCP ports,
-// no firewall: immune to WSL2 NAT vs mirrored quirks. Windows-only.
+// Raw byte-copy supports HTTP hijack (run -it, logs -f, exec). The named pipe
+// is always served; TCP is opt-in (use_tcp) so there is no LAN exposure by
+// default. Windows-only.
 package relay
 
 import (
@@ -20,9 +22,10 @@ import (
 
 	"github.com/Microsoft/go-winio"
 	"github.com/CHE3MZ/dockup/internal/config"
+	"github.com/CHE3MZ/dockup/internal/userconfig"
 )
 
-// PipeName re-exports the canonical pipe.
+// PipeName re-exports the default pipe.
 const PipeName = config.PipeName
 
 func dbg(format string, a ...any) {
@@ -31,23 +34,41 @@ func dbg(format string, a ...any) {
 	}
 }
 
-// Alive dials the pipe with a short timeout. True = something holds the name
-// (ours or foreign — callers must check state before attaching).
-func Alive() bool {
+// AliveOn dials a specific pipe with a short timeout.
+func AliveOn(pipe string) bool {
 	timeout := 2 * time.Second
-	c, err := winio.DialPipe(PipeName, &timeout)
+	c, err := winio.DialPipe(pipe, &timeout)
 	if err != nil {
 		return false
-		}
+	}
 	_ = c.Close()
 	return true
 }
 
-// WaitAlive polls until the pipe answers or timeout elapses.
+// Alive dials the default pipe. True = something holds the name
+// (ours or foreign — callers must check state before attaching).
+func Alive() bool { return AliveOn(PipeName) }
+
+// TCPAlive dials a TCP bridge address (e.g. 127.0.0.1:2375).
+func TCPAlive(addr string) bool {
+	c, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
+
+// WaitAlive polls until the default pipe answers or timeout elapses.
 func WaitAlive(timeout time.Duration) bool {
+	return WaitAliveOn(PipeName, timeout)
+}
+
+// WaitAliveOn polls a specific pipe.
+func WaitAliveOn(pipe string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if Alive() {
+		if AliveOn(pipe) {
 			return true
 		}
 		time.Sleep(200 * time.Millisecond)
@@ -55,11 +76,16 @@ func WaitAlive(timeout time.Duration) bool {
 	return false
 }
 
-// WaitDead polls until the pipe stops answering or timeout elapses.
+// WaitDead polls until the default pipe stops answering or timeout elapses.
 func WaitDead(timeout time.Duration) bool {
+	return WaitDeadOn(PipeName, timeout)
+}
+
+// WaitDeadOn polls a specific pipe.
+func WaitDeadOn(pipe string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if !Alive() {
+		if !AliveOn(pipe) {
 			return true
 		}
 		time.Sleep(200 * time.Millisecond)
@@ -67,21 +93,67 @@ func WaitDead(timeout time.Duration) bool {
 	return false
 }
 
-// Serve blocks accepting pipe clients and bridging each into the distro.
-// Stops on ctx cancel. One goroutine (+ one wsl.exe) per connection.
+// Serve blocks serving the default pipe only (no TCP). Kept for compat.
 func Serve(ctx context.Context, distro string) error {
+	return ServeEx(ctx, distro, PipeName, false, userconfig.DefaultPort)
+}
+
+// ServeEx serves pipe plus, when useTCP is true, a 127.0.0.1:port bridge.
+// Stops on ctx cancel. One goroutine (+ one wsl.exe) per connection.
+func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) error {
 	if distro == "" {
 		return fmt.Errorf("no distro")
 	}
-	l, err := winio.ListenPipe(PipeName, nil)
+	if pipe == "" {
+		pipe = PipeName
+	}
+	if useTCP {
+		if err := userconfig.ValidatePort(port); err != nil {
+			return err
+		}
+	}
+	l, err := winio.ListenPipe(pipe, nil)
 	if err != nil {
-		return fmt.Errorf("listen %s: %w", PipeName, err)
+		return fmt.Errorf("listen %s: %w", pipe, err)
 	}
 	defer l.Close()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	go func() {
 		<-ctx.Done()
 		l.Close()
 	}()
+
+	if useTCP {
+		addr := fmt.Sprintf("127.0.0.1:%d", port)
+		tl, err := net.Listen("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("listen %s: %w", addr, err)
+		}
+		defer tl.Close()
+		go func() {
+			<-ctx.Done()
+			tl.Close()
+		}()
+		go func() {
+			for {
+				c, err := tl.Accept()
+				if err != nil {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						time.Sleep(50 * time.Millisecond)
+						continue
+					}
+				}
+				go bridgeConn(c, distro)
+			}
+		}()
+		dbg("tcp bridge on %s", addr)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -102,8 +174,8 @@ func Serve(ctx context.Context, distro string) error {
 	}
 }
 
-func bridgeConn(pipe net.Conn, distro string) {
-	defer pipe.Close()
+func bridgeConn(client net.Conn, distro string) {
+	defer client.Close()
 	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--",
 		"socat", "STDIO", "UNIX-CONNECT:/var/run/docker.sock")
 	toProc, err := cmd.StdinPipe()
@@ -128,12 +200,12 @@ func bridgeConn(pipe net.Conn, distro string) {
 	// hello-world output). Kill socat as soon as one side ends.
 	done := make(chan struct{}, 2)
 	go func() {
-		_, _ = io.Copy(toProc, pipe)
+		_, _ = io.Copy(toProc, client)
 		_ = toProc.Close()
 		done <- struct{}{}
 	}()
 	go func() {
-		_, _ = io.Copy(pipe, fromProc)
+		_, _ = io.Copy(client, fromProc)
 		done <- struct{}{}
 	}()
 	<-done

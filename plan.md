@@ -472,3 +472,79 @@ gh run view <ID> --log   # read fully; fix-forward on failure
 gh workflow run ci
 gh workflow run e2e-wsl
 ```
+
+---
+
+## 10. User config, paths, TCP, styling, help, new test suites
+
+### 10.1 `~/.dockup/config.json` (`internal/userconfig`)
+
+Created on first dockup run (`Ensure`), bare minimum:
+
+```json
+{
+  "default_path": "C:/Users/<u>/AppData/Local/dockup/wsl",
+  "current_path": "",
+  "port": 2375,
+  "use_tcp": false,
+  "pipe_name": "\\\\.\\pipe\\dockup_engine",
+  "color": true
+}
+```
+
+- `default_path`: prefilled install location for the next setup; rewritten
+  to whatever path was used on EVERY successful setup.
+- `current_path`: where the installed distro actually lives; set on setup,
+  cleared on uninstall/doctor-repair; dockup reads it to find the distro dir.
+- `port` + `use_tcp`: optional 127.0.0.1-only TCP bridge (named pipe is
+  always served; default off = no LAN exposure). Validated 1-65535.
+- `pipe_name`: default `\\.\pipe\dockup_engine`, overridable.
+- `color`: master switch for CLI styling.
+
+### 10.2 Install location UX (`dockup setup [--path=DIR]`)
+
+- `--path="D:/WSL"` (or `--path DIR`) skips the prompt, is validated
+  absolute, and becomes the new default on success.
+- Interactive: `where do you want to install the dockup distro?`
+  `enter path e.g D:/WSL [default: <last used>]:` — empty input keeps the
+  default (emulates a prefilled box); anything else replaces it.
+- Uninstall keeps `default_path`, clears `current_path`, removes the
+  current install dir. Doctor clears a stale `current_path` when the distro
+  is gone and validates both paths + port.
+
+### 10.3 Optional TCP bridge (`internal/relay.ServeEx`)
+
+`ServeEx(ctx, distro, pipe, useTCP, port)` serves the pipe plus, when
+enabled, `net.Listen("tcp", "127.0.0.1:port")`; every accepted socket
+(pipe or TCP) reuses the same socat-STDIO byte-copy bridge. `doctor` and
+`daemon status`/`ps` probe `TCPAlive(127.0.0.1:port)` when enabled.
+
+### 10.4 CLI styling (`internal/ui` + `internal/logx`)
+
+Palette: white normal, bold headers, light blue (94, never dark blue) for
+help accents, gray hints, yellow warnings, red errors, green success.
+Auto-disabled when piped / `TERM=dumb` / `NO_COLOR` / `CI` /
+`GITHUB_ACTIONS` so CI logs stay grep-able (substrings unchanged).
+
+### 10.5 Help everywhere + `--dry-run`
+
+`dockup help [command]`, `-h`/`--help` globally and on every command
+(`setup`, `uninstall`, `ps`, `daemon [start|...]`, `shutdown`, `doctor`,
+`version`). `dockup setup --dry-run` prints arch, distro name, install
+dir, URLs, config path, pipe/TCP plan and changes nothing (no download,
+no import, no unregister).
+
+### 10.6 New workflows
+
+- `.github/workflows/full-test.yml` (push + dispatch): vet, unit, build,
+  help matrix, dry-run creates nothing, config bare-minimum check, custom
+  `--path` setup, config default/current assertions, doctor, daemon
+  lifecycle, pipe `version` + `hello-world`, TCP enable on port 2376 +
+  `version`/`hello-world` via TCP, TCP disable, stop, shutdown, uninstall
+  (distro gone, `current_path` cleared, `default_path` retained).
+- `.github/workflows/scoop-test.yml` (push + dispatch): install scoop,
+  `scoop install docker`, assert the resolved `docker` is the scoop shim,
+  build, setup, daemon start, `docker version` + `hello-world` through the
+  scoop-installed CLI via `DOCKER_HOST=npipe:////./pipe/dockup_engine`,
+  stop, shutdown.
+

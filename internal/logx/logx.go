@@ -1,4 +1,5 @@
 // Package logx handles foreground prints and daemon file logging with rotation.
+// Info is plain white, Ok is green (success), Warn is yellow, Err is red.
 package logx
 
 import (
@@ -7,16 +8,27 @@ import (
 	"path/filepath"
 
 	"github.com/CHE3MZ/dockup/internal/config"
+	"github.com/CHE3MZ/dockup/internal/ui"
 )
 
 // Info prints to stdout.
 func Info(format string, a ...any) {
-	fmt.Printf(format+"\n", a...)
+	fmt.Printf("%s\n", ui.White(fmt.Sprintf(format, a...)))
 }
 
-// Err prints to stderr with dockup prefix.
+// Ok prints a green success line to stdout.
+func Ok(format string, a ...any) {
+	fmt.Printf("%s\n", ui.Green(fmt.Sprintf(format, a...)))
+}
+
+// Warn prints a yellow warning to stderr.
+func Warn(format string, a ...any) {
+	fmt.Fprintf(os.Stderr, "%s\n", ui.Yellow("warning: "+fmt.Sprintf(format, a...)))
+}
+
+// Err prints to stderr with dockup prefix in red.
 func Err(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "dockup: "+format+"\n", a...)
+	fmt.Fprintf(os.Stderr, "%s\n", ui.Red("dockup: "+fmt.Sprintf(format, a...)))
 }
 
 // Append writes to the daemon log, rotating when over config.MaxLogBytes.

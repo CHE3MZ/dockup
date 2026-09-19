@@ -16,6 +16,8 @@ import (
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/setup"
 	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/ui"
+	"github.com/CHE3MZ/dockup/internal/userconfig"
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
@@ -25,133 +27,312 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
+// ensureUserConfig creates ~/.dockup/config.json on first run and applies
+// the color setting. It never fails startup: on error it warns and
+// continues with defaults.
+func ensureUserConfig() userconfig.Config {
+	cfg, err := userconfig.Ensure()
+	if err != nil {
+		ui.Warn("could not set up %s: %v", userconfig.File(), err)
+		return userconfig.Defaults()
+	}
+	cfg = cfg.WithDefaults()
+	ui.SetEnabled(cfg.Color && ui.Enabled())
+	return cfg
+}
+
+func hasHelpFlag(args []string) bool {
+	for _, a := range args {
+		if a == "-h" || a == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
 func run(args []string) int {
+	cfg := ensureUserConfig()
 	if len(args) == 0 {
-		return foreground()
+		return foreground(cfg)
 	}
 	switch args[0] {
 	case "--help", "-h", "help":
+		if len(args) > 1 {
+			return helpTopic(args[1])
+		}
 		usage()
 		return 0
 	case "version":
-		fmt.Printf("you're running the %s version.\n", version)
+		if hasHelpFlag(args[1:]) {
+			versionHelp()
+			return 0
+		}
+		fmt.Printf("%s", ui.White(fmt.Sprintf("you're running the %s version.\n", version)))
 		return 0
 	case "setup":
-		amd, arm := false, false
-		for _, a := range args[1:] {
-			switch a {
-			case "--amd":
-				amd = true
-			case "--arm":
-				arm = true
-			default:
-				logx.Err("unknown setup flag %q (try --amd or --arm)", a)
-				return 1
-			}
-		}
-		arch, msg := config.NormalizeArch(amd, arm)
-		if msg != "" {
-			logx.Err("%s", msg)
-			return 1
-		}
-		return setup.Run(arch)
+		return cmdSetup(cfg, args[1:])
 	case "uninstall":
+		if hasHelpFlag(args[1:]) {
+			uninstallHelp()
+			return 0
+		}
 		return setup.Uninstall()
 	case "ps":
-		return cmdPs()
+		if hasHelpFlag(args[1:]) {
+			psHelp()
+			return 0
+		}
+		return cmdPs(cfg)
 	case "daemon":
-		return cmdDaemon(args[1:])
+		return cmdDaemon(cfg, args[1:])
 	case "shutdown":
-		return cmdShutdown()
+		if hasHelpFlag(args[1:]) {
+			shutdownHelp()
+			return 0
+		}
+		return cmdShutdown(cfg)
 	case "doctor":
+		if hasHelpFlag(args[1:]) {
+			doctorHelp()
+			return 0
+		}
 		if err := doctor.Run(); err != nil {
-			fmt.Fprintln(os.Stderr, "dockup:", err)
+			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
 			return 1
 		}
 		return 0
 	case "__serve":
-		return serveForever()
+		return serveForever(cfg)
 	default:
-		fmt.Fprintf(os.Stderr, "dockup: unknown command %q (try --help)\n", args[0])
+		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: unknown command %q (try --help)", args[0])))
 		return 1
 	}
 }
 
-func usage() {
-	fmt.Print(`dockup — docker engine in a dedicated WSL distro (Windows only)
+func cmdSetup(cfg userconfig.Config, args []string) int {
+	if hasHelpFlag(args) {
+		setupHelp()
+		return 0
+	}
+	var amd, arm, dryRun bool
+	var pathFlag string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--amd":
+			amd = true
+		case a == "--arm":
+			arm = true
+		case a == "--dry-run":
+			dryRun = true
+		case a == "--path" && i+1 < len(args):
+			i++
+			pathFlag = args[i]
+		case strings.HasPrefix(a, "--path="):
+			pathFlag = strings.TrimPrefix(a, "--path=")
+		default:
+			logx.Err("unknown setup flag %q (try dockup setup --help)", a)
+			return 1
+		}
+	}
+	arch, msg := config.NormalizeArch(amd, arm)
+	if msg != "" {
+		logx.Err("%s", msg)
+		return 1
+	}
+	return setup.RunEx(setup.Options{Arch: arch, Path: pathFlag, DryRun: dryRun, Cfg: cfg})
+}
 
-Usage:
-  dockup                  foreground run (Ctrl+C to stop)
-  dockup setup [--amd|--arm]
+func usage() {
+	fmt.Print(ui.Header("dockup") + ui.White(" — docker engine in a dedicated WSL distro (Windows only)\n") + `
+` + ui.LightBlue("Usage:") + `
+  ` + ui.Bold("dockup") + `                  foreground run (Ctrl+C to stop)
+  ` + ui.Bold("dockup setup [--amd|--arm] [--path=DIR] [--dry-run]") + `
+  ` + ui.Bold("dockup uninstall") + `
+  ` + ui.Bold("dockup ps") + `
+  ` + ui.Bold("dockup daemon start|stop|restart|status|log") + `
+  ` + ui.Bold("dockup shutdown") + `           stop everything
+  ` + ui.Bold("dockup doctor") + `             preflight + repair stale state
+  ` + ui.Bold("dockup version") + `
+  ` + ui.Bold("dockup help [command]") + `     show help (also -h / --help everywhere)
+` + ui.Gray("Config: ~/.dockup/config.json (default_path, current_path, port, use_tcp, pipe_name, color)") + `
+`)
+}
+
+func helpTopic(name string) int {
+	switch name {
+	case "setup":
+		setupHelp()
+	case "uninstall":
+		uninstallHelp()
+	case "ps":
+		psHelp()
+	case "daemon":
+		daemonHelp()
+	case "shutdown":
+		shutdownHelp()
+	case "doctor":
+		doctorHelp()
+	case "version":
+		versionHelp()
+	default:
+		logx.Err("unknown help topic %q (try --help)", name)
+		return 1
+	}
+	return 0
+}
+
+func setupHelp() {
+	fmt.Print(ui.Header("dockup setup") + `
+  Install the dedicated ` + ui.Cyan(`"dockup"`) + ` Debian distro into WSL,
+  install + configure the Docker daemon (systemd), and verify the bridge.
+
+` + ui.LightBlue("Usage:") + `
+  dockup setup [--amd|--arm] [--path=DIR] [--dry-run]
+
+` + ui.LightBlue("Options:") + `
+  ` + ui.Bold("--amd, --arm") + `     distro architecture (default: --amd)
+  ` + ui.Bold("--path=DIR") + `     install directory, e.g. --path="D:/WSL"
+                  skips the interactive prompt; becomes the new default
+  ` + ui.Bold("--dry-run") + `       print what would happen without changing anything
+  ` + ui.Bold("-h, --help") + `       show this help
+
+  Without --path you are asked:
+    ` + ui.Gray(`where do you want to install the dockup distro? [default: <last used>]`) + `
+  An empty answer keeps the default. The chosen path is saved as both
+  ` + ui.Cyan("default_path") + ` (prefilled next time) and ` + ui.Cyan("current_path") + ` in
+  ` + ui.Cyan("~/.dockup/config.json") + `.
+`)
+}
+
+func uninstallHelp() {
+	fmt.Print(ui.Header("dockup uninstall") + `
+  Remove the dockup WSL distro and clear its state.
+
+` + ui.LightBlue("Usage:") + `
   dockup uninstall
+`)
+}
+
+func psHelp() {
+	fmt.Print(ui.Header("dockup ps") + `
+  Show dockup status: ` + ui.Green("running") + ` (foreground/daemon) or ` + ui.White("stopped") + `.
+
+` + ui.LightBlue("Usage:") + `
   dockup ps
-  dockup daemon start|stop|restart|status|log
-  dockup shutdown           stop everything
-  dockup doctor             preflight + repair stale state
+`)
+}
+
+func daemonHelp() {
+	fmt.Print(ui.Header("dockup daemon") + `
+  Manage the background dockup process (named pipe + optional TCP bridge).
+
+` + ui.LightBlue("Usage:") + `
+  dockup daemon start     start the background process
+  dockup daemon stop      stop the background process
+  dockup daemon restart   restart the background process
+  dockup daemon status    brief health (running / stopped)
+  dockup daemon log       follow the log (read-only, Ctrl+C to exit)
+`)
+}
+
+func shutdownHelp() {
+	fmt.Print(ui.Header("dockup shutdown") + `
+  Stop all dockup processes (foreground hint + daemon) and terminate
+  the dockup WSL distro.
+
+` + ui.LightBlue("Usage:") + `
+  dockup shutdown
+`)
+}
+
+func doctorHelp() {
+	fmt.Print(ui.Header("dockup doctor") + `
+  Preflight checks (WSL, distro, systemd, docker socket, pipe/TCP,
+  config) plus repair of stale state.
+
+` + ui.LightBlue("Usage:") + `
+  dockup doctor
+`)
+}
+
+func versionHelp() {
+	fmt.Print(ui.Header("dockup version") + `
+  Print the running version.
+
+` + ui.LightBlue("Usage:") + `
   dockup version
 `)
 }
 
 // foreground starts the relay inline. Refuses if already running or not setup.
-func foreground() int {
+func foreground(cfg userconfig.Config) int {
+	pipe := cfg.EffectivePipe()
 	s, _ := state.Load()
 	if !s.Installed && !wsl.Exists(config.DistroName) {
-		fmt.Fprintln(os.Stderr, "dockup has not been setup yet run \"dockup setup\" to set it up.")
+		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
 		return 1
 	}
 	if s.Daemon.PID != 0 && daemon.DaemonAlive(s) {
-		fmt.Fprintln(os.Stderr, "dockup is already running as a daemon process, run dockup daemon stop first.")
+		fmt.Fprintln(os.Stderr, ui.Red("dockup is already running as a daemon process, run dockup daemon stop first."))
 		return 1
 	}
-	if relay.Alive() {
+	if relay.AliveOn(pipe) {
 		if !s.Installed {
-			fmt.Fprintln(os.Stderr, "dockup: pipe is held by another program (e.g. Docker Desktop) — stop it before running dockup.")
+			fmt.Fprintln(os.Stderr, ui.Red("dockup: pipe is held by another program — stop it before running dockup."))
 		} else {
-			fmt.Fprintln(os.Stderr, "dockup is already running (another foreground or daemon holds the pipe).")
+			fmt.Fprintln(os.Stderr, ui.Red("dockup is already running (another foreground or daemon holds the pipe)."))
 		}
 		return 1
 	}
-	fmt.Printf("starting helper...\n")
+	fmt.Printf("%s\n", ui.White("starting helper..."))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- relay.Serve(ctx, config.DistroName)
+		errCh <- relay.ServeEx(ctx, config.DistroName, pipe, cfg.UseTCP, cfg.EffectivePort())
 	}()
-	if !relay.WaitAlive(10 * time.Second) {
+	if !relay.WaitAliveOn(pipe, 10*time.Second) {
 		select {
 		case err := <-errCh:
-			fmt.Fprintf(os.Stderr, "dockup: helper failed: %v\n", err)
+			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
 		default:
-			fmt.Fprintln(os.Stderr, "dockup: helper failed (pipe never came up)")
+			fmt.Fprintln(os.Stderr, ui.Red("dockup: helper failed (pipe never came up)"))
 		}
 		cancel()
 		return 1
 	}
-	fmt.Printf("helper up and running on %s\n", config.PipeName)
-	fmt.Printf("use: docker -H npipe:////./pipe/dockup_engine version\n")
-	fmt.Printf("dockup running in foreground (Ctrl+C to stop)...\n")
+	fmt.Printf("%s\n", ui.Green(fmt.Sprintf("helper up and running on %s", pipe)))
+	if cfg.UseTCP {
+		fmt.Printf("%s\n", ui.White(fmt.Sprintf("tcp bridge on %s", cfg.TCPAddr())))
+	}
+	fmt.Printf("%s\n", ui.Cyan("use: docker -H npipe:////./pipe/dockup_engine version"))
+	fmt.Printf("%s\n", ui.White("dockup running in foreground (Ctrl+C to stop)..."))
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 	select {
 	case <-sig:
 	case err := <-errCh:
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "dockup: helper failed: %v\n", err)
+			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
 			return 1
 		}
 	}
 	cancel()
-	_ = relay.WaitDead(5 * time.Second)
-	fmt.Printf("dockup stopped\n")
+	_ = relay.WaitDeadOn(pipe, 5*time.Second)
+	fmt.Printf("%s\n", ui.White("dockup stopped"))
 	return 0
 }
 
 // serveForever is the hidden daemon child holding the pipe.
-func serveForever() int {
+func serveForever(cfg userconfig.Config) int {
 	s, _ := state.Load()
 	if !s.Installed {
-		fmt.Fprintln(os.Stderr, "dockup: helper failed (not setup)")
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: helper failed (not setup)"))
+		return 1
+	}
+	if err := userconfig.ValidatePort(cfg.EffectivePort()); cfg.UseTCP && err != nil {
+		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
 		return 1
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -162,52 +343,65 @@ func serveForever() int {
 		<-sig
 		cancel()
 	}()
-	if err := relay.Serve(ctx, config.DistroName); err != nil {
-		fmt.Fprintf(os.Stderr, "dockup: helper failed: %v\n", err)
+	if err := relay.ServeEx(ctx, config.DistroName, cfg.EffectivePipe(), cfg.UseTCP, cfg.EffectivePort()); err != nil {
+		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
 		return 1
 	}
 	return 0
 }
 
-func cmdPs() int {
+func cmdPs(cfg userconfig.Config) int {
 	s, _ := state.Load()
-	if relay.Alive() {
-		if s.Daemon.PID != 0 && daemon.DaemonAlive(s) {
-			fmt.Printf("running (daemon pid %d)\n", s.Daemon.PID)
-		} else if s.Installed {
-			fmt.Printf("running (foreground)\n")
+	pipe := cfg.EffectivePipe()
+	tcpNote := ""
+	if cfg.UseTCP {
+		if relay.TCPAlive(cfg.TCPAddr()) {
+			tcpNote = " tcp " + cfg.TCPAddr() + " ok"
 		} else {
-			fmt.Printf("stopped (pipe held by another program, not dockup)\n")
+			tcpNote = " tcp " + cfg.TCPAddr() + " down"
+		}
+	}
+	if relay.AliveOn(pipe) {
+		if s.Daemon.PID != 0 && daemon.DaemonAlive(s) {
+			fmt.Printf("%s\n", ui.Green(fmt.Sprintf("running (daemon pid %d%s)", s.Daemon.PID, tcpNote)))
+		} else if s.Installed {
+			fmt.Printf("%s\n", ui.Green(fmt.Sprintf("running (foreground%s)", tcpNote)))
+		} else {
+			fmt.Printf("%s\n", ui.White("stopped (pipe held by another program, not dockup)"))
 		}
 		return 0
 	}
-	fmt.Printf("stopped\n")
+	fmt.Printf("%s\n", ui.White("stopped"))
 	return 0
 }
 
-func cmdDaemon(args []string) int {
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "dockup: daemon needs start|stop|restart|status|log")
-		return 1
+func cmdDaemon(cfg userconfig.Config, args []string) int {
+	if len(args) == 0 || hasHelpFlag(args) {
+		daemonHelp()
+		if len(args) == 0 {
+			fmt.Fprintln(os.Stderr, ui.Red("dockup: daemon needs start|stop|restart|status|log"))
+			return 1
+		}
+		return 0
 	}
-	// If foreground holds the pipe, daemon cmds (except status/log) refuse.
+	// If foreground holds the pipe, daemon start refuses.
 	s, _ := state.Load()
-	if relay.Alive() && s.Daemon.PID == 0 && !daemon.DaemonAlive(s) {
+	if relay.AliveOn(cfg.EffectivePipe()) && s.Daemon.PID == 0 && !daemon.DaemonAlive(s) {
 		if args[0] == "start" {
-			fmt.Fprintln(os.Stderr, "dockup is already running as a foreground process, ctrl + C in order to use the dockup daemon.")
+			fmt.Fprintln(os.Stderr, ui.Red("dockup is already running as a foreground process, ctrl + C in order to use the dockup daemon."))
 			return 1
 		}
 	}
 	switch args[0] {
 	case "start":
 		if err := daemon.Start(); err != nil {
-			fmt.Fprintln(os.Stderr, "dockup:", err)
+			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
 			return 1
 		}
 		return 0
 	case "stop":
 		if err := daemon.Stop(); err != nil {
-			fmt.Fprintln(os.Stderr, "dockup:", err)
+			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
 			return 1
 		}
 		return 0
@@ -215,7 +409,7 @@ func cmdDaemon(args []string) int {
 		_ = daemon.Stop()
 		time.Sleep(1 * time.Second)
 		if err := daemon.Start(); err != nil {
-			fmt.Fprintln(os.Stderr, "dockup:", err)
+			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
 			return 1
 		}
 		return 0
@@ -224,7 +418,7 @@ func cmdDaemon(args []string) int {
 	case "log":
 		return daemonLog()
 	default:
-		fmt.Fprintf(os.Stderr, "dockup: unknown daemon command %q\n", args[0])
+		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: unknown daemon command %q", args[0])))
 		return 1
 	}
 }
@@ -232,7 +426,7 @@ func cmdDaemon(args []string) int {
 // daemonLog tails the log file read-only until Ctrl+C.
 func daemonLog() int {
 	path := config.LogFile()
-	fmt.Printf("showing %s (read-only, Ctrl+C to exit)...\n", path)
+	fmt.Printf("%s\n", ui.Gray(fmt.Sprintf("showing %s (read-only, Ctrl+C to exit)...", path)))
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 	var offset int64
@@ -250,7 +444,7 @@ func daemonLog() int {
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "dockup: no log yet (%v)\n", err)
+			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: no log yet (%v)", err)))
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -266,13 +460,13 @@ func daemonLog() int {
 	}
 }
 
-func cmdShutdown() int {
+func cmdShutdown(cfg userconfig.Config) int {
 	_ = daemon.Stop()
 	_ = wsl.Terminate(config.DistroName)
-	if relay.Alive() {
-		fmt.Fprintln(os.Stderr, "dockup: pipe still held (a foreground dockup may still be running — Ctrl+C it)")
+	if relay.AliveOn(cfg.EffectivePipe()) {
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: pipe still held (a foreground dockup may still be running — Ctrl+C it)"))
 		return 1
 	}
-	fmt.Printf("dockup shutdown complete (stopped)\n")
+	fmt.Printf("%s\n", ui.Green("dockup shutdown complete (stopped)"))
 	return 0
 }

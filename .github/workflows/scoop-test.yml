@@ -1,0 +1,52 @@
+name: scoop-test
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  scoop:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: install scoop
+        run: |
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+          Invoke-RestMethod get.scoop.sh | Invoke-Expression
+      - name: scoop install docker CLI
+        run: |
+          scoop install docker
+          "$env:USERPROFILE\scoop\shims" | Out-File -Append $env:GITHUB_PATH
+      - name: verify scoop docker CLI
+        run: |
+          $src = (Get-Command docker).Source
+          if ($src -notlike '*scoop*') { throw "docker not from scoop: $src" }
+          docker --version
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: build
+        run: go build -o dockup.exe ./cmd/dockup
+      - name: setup dockup (amd64)
+        run: echo y | .\dockup.exe setup --amd
+      - name: diagnose setup failure
+        if: failure()
+        run: |
+          Get-Item $env:TEMP\dockup-* -ErrorAction Continue | Select-Object FullName, Length
+          wsl --list --verbose
+      - name: doctor after setup
+        run: .\dockup.exe doctor
+      - name: daemon start
+        run: .\dockup.exe daemon start
+      - name: bridge via scoop docker CLI (DOCKER_HOST)
+        run: |
+          $env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'
+          docker version
+      - name: hello-world via scoop docker CLI
+        timeout-minutes: 5
+        run: |
+          $env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'
+          docker run --rm hello-world
+      - name: daemon stop
+        run: .\dockup.exe daemon stop
+      - name: shutdown
+        run: .\dockup.exe shutdown
