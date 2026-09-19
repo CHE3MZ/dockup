@@ -147,6 +147,16 @@ apt-get install -y docker-ce docker-ce-cli containerd.io socat
 		"command -v dockerd && command -v socat && command -v containerd"); err != nil || len(out) == 0 {
 		return snap, hadPrior, fmt.Errorf("engine install finished but binaries missing: %v", err)
 	}
+	// The .deb postinst auto-enables docker/containerd under systemd, which
+	// would autostart the engine on every WSL boot and double-run beside
+	// ours. dockup owns these processes exclusively: disable everything —
+	// but only when WE caused it (never touch a pre-existing install).
+	if !hadPrior {
+		_, _ = wsl.ExecScript(distro, 30*time.Second,
+			"command -v systemctl >/dev/null && systemctl disable --now docker.service docker.socket containerd.service || true")
+	} else {
+		fmt.Fprintln(os.Stderr, "dockup: warning: pre-existing docker install kept as-is (may conflict on the socket)")
+	}
 	return snap, hadPrior, nil
 }
 

@@ -107,6 +107,7 @@ jobs:
         run: .\dockup.exe doctor
 
       - name: dockup setup Debian
+        timeout-minutes: 15
         run: |
           .\dockup.exe setup Debian
           if ($LASTEXITCODE -ne 0) { throw 'setup failed' }
@@ -115,15 +116,19 @@ jobs:
       - name: dockup doctor (post-setup)
         run: .\dockup.exe doctor
 
-      - name: In-distro engine check (discriminates dockerd vs relay faults)
+      # No-autostart proof: setup must leave binaries present but NOTHING running.
+      - name: In-distro engine check (binaries yes, autostart no)
         run: |
+          wsl -d Debian -u root -- command -v dockerd
+          if ($LASTEXITCODE -ne 0) { throw 'dockerd missing after setup' }
+          wsl -d Debian -u root -- command -v socat
+          if ($LASTEXITCODE -ne 0) { throw 'socat missing after setup' }
           wsl -d Debian -u root -- test -S /var/run/docker.sock
-          if ($LASTEXITCODE -ne 0) { throw 'no dockerd socket in distro after setup' }
-          wsl -d Debian -u root -- docker version --format '{{.Server.Version}}'
-          if ($LASTEXITCODE -ne 0) { throw 'dockerd not answering in distro after setup' }
+          if ($LASTEXITCODE -eq 0) { throw 'engine autostarted by setup (must stay down until dockup run)' }
+          Write-Host 'binaries present, engine down: no autostart'
 
       - name: Foreground run serves, external shutdown tears down
-        run: |
+        timeout-minutes: 8
           $env:DOCKUP_DEBUG = '1'
           $proc = Start-Process -FilePath "$PWD\dockup.exe" -ArgumentList @('-d','Debian') -NoNewWindow -PassThru -RedirectStandardOutput 'fg.out.log' -RedirectStandardError 'fg.err.log'
           $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
@@ -162,6 +167,7 @@ jobs:
           if ($ps -notmatch 'stopped') { throw "expected stopped ps, got: $ps" }
 
       - name: dockup daemon start
+        timeout-minutes: 8
         run: |
           .\dockup.exe daemon start -d Debian
           if ($LASTEXITCODE -ne 0) { throw 'daemon start failed' }
@@ -173,6 +179,7 @@ jobs:
           if ($ps -notmatch 'running') { throw "expected running ps, got: $ps" }
 
       - name: docker run hello-world through dockup relay
+        timeout-minutes: 8
         run: |
           $env:DOCKER_HOST = 'npipe:////./pipe/docker_engine'
           .\dockup.exe env --shell powershell
@@ -211,6 +218,7 @@ jobs:
 
       # Acceptance: revert removes only the delta, images survive re-setup.
       - name: Revert cycle (delta-only removal + re-setup + data intact)
+        timeout-minutes: 20
         run: |
           'y' | .\dockup.exe revert Debian
           if ($LASTEXITCODE -ne 0) { throw 'revert failed' }

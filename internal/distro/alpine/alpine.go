@@ -3,6 +3,7 @@ package alpine
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -83,6 +84,14 @@ apk add --no-cache docker containerd socat docker-cli-compose
 	if out, err := wsl.Exec(distro, 15*time.Second, "sh", "-c",
 		"command -v dockerd && command -v socat && command -v containerd"); err != nil || len(out) == 0 {
 		return snap, hadPrior, fmt.Errorf("engine install finished but binaries missing: %v", err)
+	}
+	// Never autostart under OpenRC either (only when WE installed it —
+	// never touch a pre-existing install's services).
+	if !hadPrior {
+		_, _ = wsl.ExecScript(distro, 30*time.Second,
+			"rc-update del docker default 2>/dev/null; rc-update del containerd default 2>/dev/null; rc-service docker stop 2>/dev/null; rc-service containerd stop 2>/dev/null; true")
+	} else {
+		fmt.Fprintln(os.Stderr, "dockup: warning: pre-existing docker install kept as-is (may conflict on the socket)")
 	}
 	return snap, hadPrior, nil
 }
