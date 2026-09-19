@@ -1,5 +1,7 @@
 # Revision :
 
+**github.com/CHE3MZ/dockup**
+
 due to the previous plans shortcomings and many other issues, a revision and reformatting of the whole
 project architecture is needed, here is the new plan :
 
@@ -50,7 +52,8 @@ Setting up dockup :
 ```
 other dockup commands and what they will do :
 
-* dockup ## start dockup as a foreground process , note that if dockup daemon is running this cannot work and should
+* dockup ## start dockup as a foreground process , you can do ctrl + C to stop dockup this way since its a forground process 
+(IF you run it this way that is.), note that if dockup daemon is running this cannot work and should
 say that a dockup process is already running, same goes if another foreground process is found running it should tell
 the user the action could not be done. also if dockup has not been setup yet it should say "dockup has not been setup yet
 run "dockup setup" to set it up."
@@ -97,3 +100,19 @@ gave back, again gh run view <ID> to view run and gh run view <RUN_ID> --log for
 standard TCP/named-pipe connections from Windows CLI to a WSL Docker daemon often struggle with interactive flags (-i, -t, or terminal TTY resizing) unless specially handled.
 
 Docker Desktop solves this using a custom Windows named pipe (\\.\pipe\docker_engine) that translates Windows console handles directly into the WSL socket via a companion helper process (docker-proxy / backend service). we will likely need a similar socket/stream-forwarding mechanism so container logs and interactive sessions (docker run -it) pipe cleanly back to the Windows command prompt.
+
+#### To achieve seamless interactive sessions (-i, -t, and TTY resizing) without forcing users to rely on raw TCP ports, we can write a small companion helper binary (in Go, C#, or Rust) that runs on the Windows side.
+
+Listen on Windows: Use a named pipe listener on Windows (e.g., \\.\pipe\dockup_engine or mirroring \\.\pipe\docker_engine). In Go, we can use the [github.com/Microsoft/go-winio](https://github.com/Microsoft/go-winio) package to easily set up a named pipe listener.
+
+Connect to WSL: Forward incoming named pipe connections to the WSL distro. You can communicate with your Debian dockup distro either by:
+
+Connecting directly to its internal Unix socket (/var/run/docker.sock) using WSL's interop socket sharing.
+
+Or binding the daemon inside WSL to a local TCP port or a localized WSL IP address, and proxying the streams across.
+
+Handle Bi-Directional Streams & TTY: Use standard stream copying (io.Copy in Go) to pipe stdin, stdout, and stderr transparently between the Windows client and the WSL backend. For TTY resizing, we will want to listen for API calls containing resize dimensions and forward those control sequences to the Docker API endpoint.
+
+This approach keeps dockup entirely self-contained, open-source, and avoids any legal or technical entanglements with Docker Desktop's proprietary binaries.
+
+#### note that this is up for discussion, it is also important to make this helper work based on how dockup is ran, if you run dockup as forground by simply running "dockup" , this helper must also be a forground and exit upon a ctrl + C on the dockup foreground process or upon a dockup shutdown, if dockup is ran as a daemon via the daemon command it shall start stop and restart etc. alongisde the daemon when the daemon is touched. the helper shouldnt be always running it should run alongside dockup however dockup is running , and it should obviously be respected and maintained by dockup itself so if the helper fails, dockup wont continue and will error out as well in order to prevent unwanted behaviour, for example if you run "dockup" it should start the helper too and show it starting up and tell us if its up and running, since the foreground already logs everything inline, and for daemon start stop and restart dockup should wait for the helper to start stop or restart, before assuring the user that dockup has started stopped or restarted scucessfully , again to ensure no strange stuff happens. and in case the helper does fail, the dockup foreground process, or the daemon background process, must exit and error out explaining that the helper failed , alongisde an explanation for why it failed (error code etc.)
