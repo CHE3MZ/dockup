@@ -138,7 +138,9 @@ func Serve(ctx context.Context, distro string) error {
 }
 
 // ServeEx serves pipe plus, when useTCP is true, a 127.0.0.1:port bridge.
-// Stops on ctx cancel. One goroutine (+ one wsl.exe) per connection.
+// The pipe is served in message mode so client stdin CloseWrite arrives as
+// EOF (lets `docker run -i` containers see stdin end). Stops on ctx cancel.
+// One goroutine (+ one wsl.exe) per connection.
 func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) error {
 	if distro == "" {
 		return fmt.Errorf("no distro")
@@ -151,7 +153,7 @@ func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) er
 			return err
 		}
 	}
-	l, err := winio.ListenPipe(pipe, nil)
+	l, err := winio.ListenPipe(pipe, &winio.PipeConfig{MessageMode: true})
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", pipe, err)
 	}
@@ -233,21 +235,32 @@ func bridgeConn(client net.Conn, distro string) {
 		return
 	}
 	dbg("bridge wsl pid %d", cmd.Process.Pid)
-	// Either direction finishing must tear the whole bridge down:
-	// some `docker run` streams print output but keep the socket half-open,
-	// which deadlocked the old sequential Wait (GH e2e hung 16min after
-	// hello-world output). Kill socat as soon as one side ends.
-	done := make(chan struct{}, 2)
+	// Teardown rules (message-mode pipe: a client stdin CloseWrite arrives
+	// here as EOF, so stdin finishing first is NORMAL, not a wedge):
+	// - daemon side finishes first: the exchange is over, reap immediately
+	//   (this also fixed the old sequential-Wait deadlock where GH e2e hung
+	//   16min after hello-world output on a half-open socket).
+	// - stdin side finishes first: half-close downstream (socat propagates
+	//   stdin EOF to the daemon) and give the container a grace period to
+	//   flush output and exit before reaping.
+	done := make(chan string, 2)
 	go func() {
 		_, _ = io.Copy(toProc, client)
 		_ = toProc.Close()
-		done <- struct{}{}
+		done <- "stdin"
 	}()
 	go func() {
 		_, _ = io.Copy(client, fromProc)
-		done <- struct{}{}
+		done <- "stdout"
 	}()
-	<-done
+	if first := <-done; first == "stdin" {
+		timer := time.NewTimer(60 * time.Second)
+		select {
+		case <-done:
+		case <-timer.C:
+		}
+		timer.Stop()
+	}
 	_ = cmd.Process.Kill()
 	timer := time.NewTimer(5 * time.Second)
 	select {

@@ -168,19 +168,19 @@ func cmdSetup(cfg userconfig.Config, args []string) int {
 func usage() {
 	fmt.Print(ui.Header("dockup") + ui.White(" — docker engine in a dedicated WSL distro.\n") + `
 ` + ui.LightBlue("Usage:") + `
-  ` + ui.Bold("dockup") + `                      Foreground run (Ctrl+C to stop)
-  ` + ui.Bold("dockup setup 		      Launch the interactive setup wizard") + `
-  ` + ui.Bold("dockup uninstall") + `	      Uninstall the dockup distro from WSL
-  ` + ui.Bold("dockup ps") + `		      Show dockup's status
-  ` + ui.Bold("dockup daemon 	      Start | Stop | Restart | Status") + `
-  ` + ui.Bold("dockup shutdown") + `             Stop everything
-  ` + ui.Bold("dockup doctor [--fix]") + `       Repair stale states
-  ` + ui.Bold("dockup upgrade") + `              Upgrade the in-distro engine to latest
-  ` + ui.Bold("dockup version") + `	      Show current version
-  ` + ui.Bold("dockup help [command]") + `       Show this help text
-` + "\n" +
-ui.Gray("Config File: ~/.dockup/config.json") + `
-`)
+  ` + ui.Bold("dockup") + `                    Foreground run (Ctrl+C to stop)
+  ` + ui.Bold("dockup setup") + `               Launch the interactive setup wizard
+  ` + ui.Bold("dockup uninstall") + `           Uninstall the dockup distro from WSL
+  ` + ui.Bold("dockup ps") + `                  Show dockup's status
+  ` + ui.Bold("dockup daemon") + `              Start | Stop | Restart | Status
+  ` + ui.Bold("dockup shutdown") + `            Stop everything
+  ` + ui.Bold("dockup doctor [--fix]") + `      Repair stale states
+  ` + ui.Bold("dockup upgrade") + `             Upgrade the in-distro engine to latest
+  ` + ui.Bold("dockup version") + `             Show current version
+  ` + ui.Bold("dockup help [command]") + `      Show this help text
+ ` + "\n" +
+		ui.Gray("Config File: ~/.dockup/config.json") + `
+ `)
 }
 
 func helpTopic(name string) int {
@@ -210,30 +210,29 @@ func helpTopic(name string) int {
 
 func setupHelp() {
 	fmt.Print(ui.Header("dockup setup") + `
-  Install the dedicated ` + ui.Cyan(`"dockup"`) + ` Debian distro into WSL,
-  install + configure the Docker daemon (systemd), and verify the bridge.
+  Install Debian into WSL as the ` + ui.Cyan(`"dockup"`) + ` distro, set up
+  the Docker daemon on it, and check that the bridge works.
 
 ` + ui.LightBlue("Usage:") + `
   dockup setup [--amd|--arm] [--path=DIR] [--dry-run]
 
 ` + ui.LightBlue("Options:") + `
-  ` + ui.Bold("--amd, --arm") + `     distro architecture (default: --amd)
-  ` + ui.Bold("--path=DIR") + `     install directory, e.g. --path="D:/WSL"
-                  skips the interactive prompt; becomes the new default
-  ` + ui.Bold("--dry-run") + `       print what would happen without changing anything
-  ` + ui.Bold("-h, --help") + `       show this help
+  ` + ui.Bold("--amd, --arm") + `    Debian architecture (default: --amd)
+  ` + ui.Bold("--path=DIR") + `      Install here instead of asking, e.g. --path="D:/WSL".
+                   The folder you give becomes the new default.
+  ` + ui.Bold("--dry-run") + `       Show what setup would do, without changing anything.
+  ` + ui.Bold("-h, --help") + `      Show this help.
 
-  Without --path you are asked:
-    ` + ui.Gray(`where do you want to install the dockup distro? [default: <last used>]`) + `
-  An empty answer keeps the default. The chosen path is saved as both
-  ` + ui.Cyan("default_path") + ` (prefilled next time) and ` + ui.Cyan("current_path") + ` in
+  Without --path you get asked where to install. An empty answer keeps
+  the shown default. The folder you pick is saved as both
+  ` + ui.Cyan("default_path") + ` (suggested next time) and ` + ui.Cyan("current_path") + ` in
   ` + ui.Cyan("~/.dockup/config.json") + `.
 `)
 }
 
 func uninstallHelp() {
 	fmt.Print(ui.Header("dockup uninstall") + `
-  Remove the dockup WSL distro and clear its state.
+  Delete the dockup distro from WSL and clear its saved state.
 
 ` + ui.LightBlue("Usage:") + `
   dockup uninstall
@@ -242,14 +241,14 @@ func uninstallHelp() {
 
 func psHelp() {
 	fmt.Print(ui.Header("dockup ps") + `
-  Show dockup status as a table (bold headers, plain values):
+  Show dockup's status:
 
     STATUS      AUTOSTART
     running     off
 
   STATUS is ` + ui.Green("running") + ` (engine answering), ` + ui.White("starting...") + `
   (bridge up, engine still booting) or ` + ui.White("stopped") + `.
-  AUTOSTART mirrors ~/.dockup/config.json (` + ui.Cyan("on") + `/` + ui.Cyan("off") + `).
+  AUTOSTART is ` + ui.Cyan("on") + ` or ` + ui.Cyan("off") + `, taken from ~/.dockup/config.json.
 
 ` + ui.LightBlue("Usage:") + `
   dockup ps
@@ -258,7 +257,7 @@ func psHelp() {
 
 func daemonHelp() {
 	fmt.Print(ui.Header("dockup daemon") + `
-  Manage the background dockup process (named pipe + optional TCP bridge).
+  Run dockup in the background (named pipe, plus TCP if enabled).
 
 ` + ui.LightBlue("Usage:") + `
   dockup daemon start     start the background process
@@ -267,15 +266,14 @@ func daemonHelp() {
   dockup daemon status    brief health (running / stopped)
   dockup daemon log       follow the log (read-only, Ctrl+C to exit)
   dockup daemon autostart [on|off]
-                          query (no arg) or set Windows login autostart
+                          show (no arg) or set starting dockup at Windows login
                           (default off, stored in ~/.dockup/config.json)
 `)
 }
 
 func shutdownHelp() {
 	fmt.Print(ui.Header("dockup shutdown") + `
-  Stop all dockup processes (foreground hint + daemon) and terminate
-  the dockup WSL distro.
+  Stop everything dockup is running and shut down its WSL distro.
 
 ` + ui.LightBlue("Usage:") + `
   dockup shutdown
@@ -284,12 +282,11 @@ func shutdownHelp() {
 
 func doctorHelp() {
 	fmt.Print(ui.Header("dockup doctor") + `
-  Preflight checks (WSL, distro, systemd, docker socket, pipe/TCP,
-  config, autostart) plus repair of stale state.
+  Check that everything dockup needs is healthy, and clean up
+  stale state left behind by crashes or reboots.
 
   With ` + ui.Bold("--fix") + `, a missing or broken in-distro engine is
-  reinstalled/reconfigured (apt repo, packages, systemd units,
-  wsl.conf) and re-verified.
+  reinstalled and reconfigured, then verified.
 
 ` + ui.LightBlue("Usage:") + `
   dockup doctor [--fix]
@@ -298,9 +295,8 @@ func doctorHelp() {
 
 func upgradeHelp() {
 	fmt.Print(ui.Header("dockup upgrade") + `
-  Upgrade the Docker engine and dependencies inside the dockup distro
-  (docker-ce, cli, containerd, buildx/compose plugins, socat) to their
-  latest versions, restart the services, and verify the daemon answers.
+  Update Docker and its dependencies inside the dockup distro to the
+  latest versions, restart its services, and verify the daemon answers.
 
 ` + ui.LightBlue("Usage:") + `
   dockup upgrade
@@ -325,7 +321,7 @@ func cmdUpgrade() int {
 
 func versionHelp() {
 	fmt.Print(ui.Header("dockup version") + `
-  Print the running version.
+  Show the dockup version.
 
 ` + ui.LightBlue("Usage:") + `
   dockup version
@@ -341,7 +337,7 @@ func foreground(cfg userconfig.Config) int {
 		return 1
 	}
 	if s.Daemon.PID != 0 && daemon.DaemonAlive(s) {
-		fmt.Fprintln(os.Stderr, ui.Red("dockup is already running as a daemon process, run dockup daemon stop first."))
+		fmt.Fprintln(os.Stderr, ui.Red("dockup is already running in the background — run dockup daemon stop first."))
 		return 1
 	}
 	if relay.AliveOn(pipe) {
@@ -352,7 +348,7 @@ func foreground(cfg userconfig.Config) int {
 		}
 		return 1
 	}
-	fmt.Printf("%s\n", ui.White("starting helper..."))
+	fmt.Printf("%s\n", ui.White("Starting dockup..."))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	errCh := make(chan error, 1)
@@ -369,12 +365,12 @@ func foreground(cfg userconfig.Config) int {
 		cancel()
 		return 1
 	}
-	fmt.Printf("%s\n", ui.Green(fmt.Sprintf("helper up and running on %s", pipe)))
+	fmt.Printf("%s\n", ui.Green(fmt.Sprintf("dockup is up on %s", pipe)))
 	if cfg.UseTCP {
 		fmt.Printf("%s\n", ui.White(fmt.Sprintf("tcp bridge on %s", cfg.TCPAddr())))
 	}
 	fmt.Printf("%s\n", ui.Cyan("use: docker -H npipe:////./pipe/dockup_engine version"))
-	fmt.Printf("%s\n", ui.White("dockup running in foreground (Ctrl+C to stop)..."))
+	fmt.Printf("%s\n", ui.White("Running in the foreground — press Ctrl+C to stop."))
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 	select {
@@ -440,7 +436,7 @@ func cmdDaemon(cfg userconfig.Config, args []string) int {
 	if len(args) == 0 || hasHelpFlag(args) {
 		daemonHelp()
 		if len(args) == 0 {
-			fmt.Fprintln(os.Stderr, ui.Red("dockup: daemon needs start|stop|restart|status|log"))
+			fmt.Fprintln(os.Stderr, ui.Red("dockup: daemon needs start|stop|restart|status|log|autostart"))
 			return 1
 		}
 		return 0
@@ -449,7 +445,7 @@ func cmdDaemon(cfg userconfig.Config, args []string) int {
 	s, _ := state.Load()
 	if relay.AliveOn(cfg.EffectivePipe()) && s.Daemon.PID == 0 && !daemon.DaemonAlive(s) {
 		if args[0] == "start" {
-			fmt.Fprintln(os.Stderr, ui.Red("dockup is already running as a foreground process, ctrl + C in order to use the dockup daemon."))
+			fmt.Fprintln(os.Stderr, ui.Red("dockup is already running in the foreground — stop it with Ctrl+C first."))
 			return 1
 		}
 	}

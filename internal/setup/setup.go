@@ -272,7 +272,7 @@ func currentInstallDir() string {
 
 // Uninstall removes the distro after confirmation.
 func Uninstall() int {
-	fmt.Printf("are you sure you want to uninstall your dockup wsl distro ? [y/n]\n")
+	fmt.Printf("Delete the dockup distro and all of its files? [y/n]\n")
 	if !askYesNo("") {
 		logx.Info("aborted")
 		return 0

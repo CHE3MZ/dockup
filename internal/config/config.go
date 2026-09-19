@@ -66,7 +66,7 @@ func FallbackURL(arch string) string { return RootfsFallbackURL(arch) }
 // Empty means default (amd64). Returns error string empty on success.
 func NormalizeArch(amdf, armf bool) (arch string, errMsg string) {
 	if amdf && armf {
-		return "", "pass only one of --amd or --arm"
+		return "", "pick one: --amd or --arm, not both"
 	}
 	if armf {
 		return "arm64", ""

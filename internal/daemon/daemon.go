@@ -52,11 +52,11 @@ func Start() error {
 			return fmt.Errorf("dockup has not been setup yet run \"dockup setup\" to set it up")
 		}
 		if relay.AliveOn(pipe) && s.Daemon.PID == 0 {
-			return fmt.Errorf("dockup is already running as a foreground process, ctrl + C it to stop it and re-run")
+			return fmt.Errorf("dockup is already running in the foreground — stop it with Ctrl+C first")
 		}
 		if s.Daemon.PID != 0 {
 			if processAlive(s.Daemon.PID) {
-				return fmt.Errorf("dockup is already running as a daemon process, run dockup daemon restart to restart it")
+				return fmt.Errorf("dockup is already running in the background — run dockup daemon restart to restart it")
 			}
 			s.Daemon = state.Daemon{}
 		}
@@ -75,7 +75,7 @@ func Start() error {
 		cmd.Stderr = logf
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("start helper: %w", err)
+			return fmt.Errorf("couldn't start the background process: %w", err)
 		}
 		pid := cmd.Process.Pid
 		// Detach: parent does not Wait; child outlives us via no-window.
@@ -161,7 +161,7 @@ func Status() int {
 		logx.Info("stopped (pipe held by another program, not dockup)")
 		return 1
 	case s.Installed && alive:
-		logx.Info("running (pipe alive, owner unknown%s)", tcpNote)
+		logx.Info("running (pipe held by another process%s)", tcpNote)
 		return 0
 	default:
 		if s.Daemon.PID != 0 && !daemonUp {
