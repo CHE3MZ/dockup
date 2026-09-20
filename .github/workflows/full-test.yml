@@ -17,6 +17,11 @@ jobs:
         run: go test -race ./...
       - name: build
         run: go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
+      - name: host info (CPU vendor and model, for the record)
+        run: |
+          $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+          Write-Output ("CPU: {0} [{1}]" -f $cpu.Name, $cpu.Manufacturer)
+          exit 0
       - name: version is stamped with commit
         run: |
           $o = .\dockup.exe version

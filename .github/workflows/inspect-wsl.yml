@@ -57,6 +57,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'iptables missing' }
           wsl -d dockup -u root -- grep -q overlay /proc/filesystems
           if ($LASTEXITCODE -ne 0) { throw 'overlayfs missing' }
+      - name: upgrade engine to latest
+        timeout-minutes: 10
+        run: |
+          .\dockup.exe upgrade
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          if (!$srv) { throw 'no server version after upgrade' }
+          .\dockup.exe doctor
       - name: provenance manifest
         run: |
           wsl -d dockup -u root -- dpkg-query -W -f='${Package} ${Version}\n' docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin socat | Set-Content provenance.txt
@@ -67,13 +74,6 @@ jobs:
         with:
           name: dockup-provenance
           path: provenance.txt
-      - name: upgrade engine to latest
-        timeout-minutes: 10
-        run: |
-          .\dockup.exe upgrade
-          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
-          if (!$srv) { throw 'no server version after upgrade' }
-          .\dockup.exe doctor
       - name: self-heal — break the engine
         run: |
           wsl -d dockup -u root -- systemctl stop docker.service docker.socket
@@ -103,3 +103,24 @@ jobs:
           if ($c.autostart -ne $false) { throw 'autostart default broken' }
           if ($c.port -ne 2375) { throw 'port default broken' }
           .\dockup.exe doctor
+      - name: reinstall and capture manifest B
+        timeout-minutes: 15
+        run: |
+          echo y | .\dockup.exe setup --amd --path="C:\dockup-inspect-wsl"
+          wsl -d dockup -u root -- dpkg-query -W -f='${Package} ${Version}\n' docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin socat | Set-Content provenance-b.txt
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          "engine: $srv" | Add-Content provenance-b.txt
+      - name: manifests A and B must match (reproducibility proof)
+        run: |
+          $a = Get-Content provenance.txt | Sort-Object
+          $b = Get-Content provenance-b.txt | Sort-Object
+          $d = Compare-Object $a $b
+          if ($d) { $d | Out-String | Write-Output; throw 'reinstall diverged from first install' }
+          Write-Output 'reinstall reproduces the first install exactly'
+          exit 0
+      - name: final uninstall
+        run: |
+          echo y | .\dockup.exe uninstall
+          $list = ((wsl --list --quiet) -join "`n") -replace "`0", ""
+          if ($list -match '(?m)^dockup$') { throw 'distro still present' }
+          exit 0

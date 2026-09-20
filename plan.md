@@ -638,8 +638,7 @@ no import, no unregister).
   dockerd/containerd/socat RSS (`-` when stopped). Implemented in
   `internal/sysinfo` (no new deps, no unsafe); covered by unit tests
   and `full-test` header/value asserts.
-- `multi-distro.yml` (push + dispatch) proves production behavior with
-  two plain neighbor distros: setup alongside them leaves their files,
+- `multi-distro.yml` (push + dispatch) proves production behavior with  two plain neighbor distros: setup alongside them leaves their files,
   workloads (tracked by Windows PID, since minbase has no pgrep/ps),
   and configs (`/etc/wsl.conf` must NOT leak) untouched; daemon start
   keeps them running; switching via `wsl -d <other>` doesn't break
@@ -683,3 +682,15 @@ half-closes socat stdin on EOF, giving the container a 60s grace period to
 flush and exit instead of killing the bridge instantly. All prior flows
 stay green, so there was no regression.
 
+### 10.14 Hardware transparency + reinstall reproducibility
+
+- `full-test` records host CPU vendor/model per run. There is no
+  Intel- or AMD-specific code anywhere (grep-verified: "amd64" only
+  selects the download payload; no asm, cpuid, or GOARCH branches),
+  so any x86-64 CPU behaves identically under WSL2 — the CPU step
+  exists so future "tested on AMD?" questions are answerable from logs.
+- `inspect-wsl` captures the package manifest AFTER upgrade, then
+  reinstalls from scratch and diffs manifest B against A: a reinstall
+  must reproduce the first install exactly. Caveat (by design, not a
+  gap): the base rootfs branch and apt repo float, so installs months
+  apart track upstream; bit-pinning would need locked versions.
