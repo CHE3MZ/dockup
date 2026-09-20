@@ -153,7 +153,8 @@ func RunEx(fix bool) error {
 	// Stale install record repair, but only on a CONFIRMED-absent distro:
 	// wsl.Exists is blind to list errors, and clearing installed on a
 	// transient wsl.exe failure would be exactly the false-positive we
-	// must avoid.
+	// must avoid. Installed lives in state.json (single source of truth);
+	// current_path still lives in config.json and is cleared alongside it.
 	if distroList, lerr := wsl.List(); lerr == nil {
 		found := false
 		for _, d := range distroList {
@@ -164,21 +165,20 @@ func RunEx(fix bool) error {
 		}
 		if !found {
 			if c, cerr := userconfig.Load(); cerr == nil {
-				fixed := false
+				c = c.WithDefaults()
 				if c.CurrentPath != "" {
 					c.CurrentPath = ""
-					fixed = true
+					_ = userconfig.Save(c)
 					logx.Info("fixed: cleared stale current_path")
 				}
-				if c.Installed {
-					c.Installed = false
-					fixed = true
+			}
+			_ = state.WithLock(func(ns *state.State) error {
+				if ns.Installed {
+					ns.Installed = false
 					logx.Info("fixed: cleared stale installed flag")
 				}
-				if fixed {
-					_ = userconfig.Save(c.WithDefaults())
-				}
-			}
+				return nil
+			})
 		}
 	}
 	// Remediation: reinstall/repair a broken in-distro engine.

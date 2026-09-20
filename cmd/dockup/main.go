@@ -35,24 +35,14 @@ func main() {
 
 // ensureUserConfig creates ~/.dockup/config.json on first run and applies
 // the color setting. It never fails startup: on error it warns and
-// continues with defaults.
+// continues with defaults. Old files may still carry an "installed" key
+// from before the flag moved to state.json; Load ignores it and the next
+// Save drops it.
 func ensureUserConfig() userconfig.Config {
 	cfg, err := userconfig.Ensure()
 	if err != nil {
 		ui.Warn("could not set up %s: %v", userconfig.File(), err)
 		return userconfig.Defaults()
-	}
-	// Adopt pre-flag installs: a state.json proving a past successful setup
-	// flips the flag on, but only while the distro is actually present —
-	// otherwise a stale state file would resurrect the flag right after
-	// doctor (or a test) cleared it. Never clears — see ReconcileInstalled.
-	if s, serr := state.Load(); serr == nil && s.Installed {
-		if cfg2, lerr := userconfig.Load(); lerr == nil && !cfg2.WithDefaults().Installed {
-			if wsl.Exists(config.DistroName) {
-				_, _ = userconfig.ReconcileInstalled(true)
-				cfg, _ = userconfig.Load()
-			}
-		}
 	}
 	cfg = cfg.WithDefaults()
 	ui.SetEnabled(cfg.Color && ui.Enabled())
@@ -514,11 +504,11 @@ func cmdPs(cfg userconfig.Config) int {
 	row := pstable.Row{
 		Status:    status,
 		Autostart: pstable.AutostartText(cfg.Autostart),
-		Installed: pstable.InstalledText(cfg.Installed),
+		Installed: pstable.InstalledText(s.Installed),
 		Size:      "-",
 		Memory:    "-",
 	}
-	if cfg.Installed {
+	if s.Installed {
 		if n, err := sysinfo.DirSize(userconfig.InstallDir()); err == nil {
 			row.Size = sysinfo.FormatSize(n)
 		}

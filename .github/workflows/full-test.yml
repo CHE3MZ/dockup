@@ -81,14 +81,16 @@ jobs:
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path = $($c.default_path)" }
           if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
-          if ($c.installed -ne $true) { throw 'installed not set on success' }
+          $s = Get-Content "$env:APPDATA\dockup\state.json" -Raw | ConvertFrom-Json
+          if ($s.installed -ne $true) { throw 'installed not set on success (state.json)' }
       - name: reinstall over existing distro
         timeout-minutes: 15
         run: |
           echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
-          if ($c.installed -ne $true) { throw 'installed not set on reinstall' }
+          $s = Get-Content "$env:APPDATA\dockup\state.json" -Raw | ConvertFrom-Json
+          if ($s.installed -ne $true) { throw 'installed not set on reinstall (state.json)' }
       - name: diagnose setup failure
         if: failure()
         continue-on-error: true
@@ -400,7 +402,8 @@ jobs:
           if ($list -match 'dockup') { throw 'distro still present after uninstall' }
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.current_path) { throw "current_path not cleared: $($c.current_path)" }
-          if ($c.installed -ne $false) { throw 'installed not cleared on uninstall' }
+          $s = Get-Content "$env:APPDATA\dockup\state.json" -Raw | ConvertFrom-Json
+          if ($s.installed -ne $false) { throw 'installed not cleared on uninstall (state.json)' }
           if ($c.autostart -ne $false) { throw 'autostart not cleared on uninstall' }
           $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
           if (Test-Path $lnk) { throw 'startup entry left behind by uninstall' }

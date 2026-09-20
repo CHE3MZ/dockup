@@ -80,11 +80,12 @@ func RunEx(o Options) int {
 		logx.Err("unknown arch %q", arch)
 		return 1
 	}
-	// fail marks the attempt as not-installed (the distro may be gone or
-	// half-built) and exits 1. It is only ever called after the confirm
-	// prompts, so aborts, dry runs, and pre-prompt errors never touch it.
+	// fail clears the install location (the distro may be gone or half-built)
+	// and exits 1. Installed lives in state.json, which is already empty on
+	// fresh failures or was reset on reinstall, so there is nothing to clear
+	// there. Only called after the confirm prompts, so aborts, dry runs,
+	// and pre-prompt errors never touch it.
 	fail := func() int {
-		cfg.Installed = false
 		cfg.CurrentPath = ""
 		_ = userconfig.Save(cfg)
 		return 1
@@ -244,10 +245,9 @@ func RunEx(o Options) int {
 	})
 	// Remember the used path as both default (prefilled next time) and
 	// current (where dockup looks for the distro). Only a fully successful
-	// setup earns installed=true.
+	// setup earns installed=true in state.json (single source of truth).
 	cfg.DefaultPath = filepath.ToSlash(installDir)
 	cfg.CurrentPath = filepath.ToSlash(installDir)
-	cfg.Installed = true
 	_ = userconfig.Save(cfg)
 	_ = os.Remove(dest)
 	_ = os.Remove(fallbackDest)
@@ -306,11 +306,11 @@ func Uninstall() int {
 	})
 	_ = os.RemoveAll(userconfig.InstallDir())
 	// Keep default_path for the next setup; everything else goes away,
-	// including login autostart.
+	// including login autostart. Installed lives in state.json (cleared
+	// above), not here.
 	if cfg, err := userconfig.Load(); err == nil {
 		cfg = cfg.WithDefaults()
 		cfg.CurrentPath = ""
-		cfg.Installed = false
 		cfg.Autostart = false
 		_ = userconfig.Save(cfg)
 	}

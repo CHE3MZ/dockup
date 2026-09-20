@@ -1,4 +1,6 @@
 // Package userconfig manages ~/.dockup/config.json: user-facing settings.
+// Installation state (installed/distro location facts) lives in state.json,
+// not here: config.json holds only user intent (paths, ports, styling).
 //
 //	{
 //	  "default_path": "D:/WSL",
@@ -7,8 +9,7 @@
 //	  "use_tcp": false,
 //	  "pipe_name": "\\\\.\\pipe\\dockup_engine",
 //	  "color": true,
-//	  "autostart": false,
-//	  "installed": false
+//	  "autostart": false
 //	}
 //
 // default_path is the prefilled install location for the next `dockup setup`
@@ -46,7 +47,6 @@ type Config struct {
 	PipeName    string `json:"pipe_name"`
 	Color       bool   `json:"color"`
 	Autostart   bool   `json:"autostart"`
-	Installed   bool   `json:"installed"`
 }
 
 // Dir is ~/.dockup.
@@ -71,7 +71,6 @@ func Defaults() Config {
 		PipeName:    DefaultPipeName,
 		Color:       true,
 		Autostart:   false,
-		Installed:   false,
 	}
 }
 
@@ -129,28 +128,6 @@ func Ensure() (Config, error) {
 		return Config{}, err
 	}
 	return c, nil
-}
-
-// ReconcileInstalled flips installed to true when an older state file proves
-// a past successful setup (pre-flag installs). It never clears the flag:
-// only setup failures, uninstall, and doctor (on confirmed-absent distro)
-// may set it false, so this cannot false-positive a working install.
-func ReconcileInstalled(stateInstalled bool) (bool, error) {
-	if !stateInstalled {
-		return false, nil
-	}
-	c, err := Load()
-	if err != nil {
-		return false, err
-	}
-	if c.Installed {
-		return false, nil
-	}
-	c.Installed = true
-	if err := Save(c); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // ValidatePort rejects out-of-range TCP ports.

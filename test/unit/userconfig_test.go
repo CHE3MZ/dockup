@@ -1,8 +1,10 @@
 package unit
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/CHE3MZ/dockup/internal/userconfig"
@@ -171,52 +173,44 @@ func TestEffectivePipeDefaultAndCustom(t *testing.T) {
 	}
 }
 
-func TestInstalledDefaultsFalse(t *testing.T) {
-	withTempHome(t)
-	c, err := userconfig.Ensure()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.Installed {
-		t.Fatal("installed should default to false")
-	}
-}
-
-func TestInstalledRoundTrip(t *testing.T) {
-	withTempHome(t)
-	c := userconfig.Defaults()
-	c.Installed = true
-	if err := userconfig.Save(c); err != nil {
-		t.Fatal(err)
-	}
-	got, err := userconfig.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !got.Installed {
-		t.Fatal("installed not persisted")
-	}
-}
-
-func TestReconcileAdoptsButNeverClears(t *testing.T) {
+func TestLegacyInstalledKeyIgnored(t *testing.T) {
 	withTempHome(t)
 	if _, err := userconfig.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := userconfig.ReconcileInstalled(true)
-	if err != nil || !changed {
-		t.Fatalf("expected flip, got changed=%v err=%v", changed, err)
-	}
-	changed, err = userconfig.ReconcileInstalled(true)
-	if err != nil || changed {
-		t.Fatalf("expected no-op, got changed=%v err=%v", changed, err)
-	}
-	// false must never clear a true flag (no false-positive wipeouts).
-	if _, err := userconfig.ReconcileInstalled(false); err != nil {
+	// Old config files (pre-move) still carry "installed": it must load
+	// without error, must not be misinterpreted, and the next Save drops it.
+	data, err := os.ReadFile(userconfig.File())
+	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := userconfig.Load()
-	if err != nil || !got.Installed {
-		t.Fatalf("flag was cleared: %+v %v", got, err)
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	m["installed"] = true
+	legacy, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(userconfig.File(), legacy, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := userconfig.Load(); err != nil {
+		t.Fatalf("legacy installed key should be ignored, got %v", err)
+	}
+	c, err := userconfig.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := userconfig.Save(c); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(userconfig.File())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"installed"`) {
+		t.Fatalf("Save should drop the legacy installed key: %s", raw)
 	}
 }
