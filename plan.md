@@ -695,7 +695,7 @@ stay green, so there was no regression.
   gap): the base rootfs branch and apt repo float, so installs months
   apart track upstream; bit-pinning would need locked versions.
 
-### 10.14 dockup restore (lightweight + --full)
+### 10.15 dockup restore (lightweight + --full)
 
 - `state.json` carries a `snapshot` (manual package names + timestamp)
   captured at every successful setup. `dockup restore` diffs the live
@@ -714,3 +714,10 @@ stay green, so there was no regression.
   socat back, backs daemon.json up, revives the engine, and keeps the
   hello-world image; `inspect-wsl` asserts `--full` wipes images and
   returns a healthy engine.
+- Hard-won repairs inside this feature (all CI-proven): post-restart
+  checks use `docker.WaitDaemon` (90s poll) instead of single-shot,
+  because dockerd needs seconds to boot; every unit (re)start is
+  preceded by `systemctl reset-failed`, because repeated crashes put
+  units into start-limit-hit where further restarts are silently
+  refused; the engine set is ALWAYS reinstalled (an unhealthy-check
+  skip once left a user-removed socat missing).
