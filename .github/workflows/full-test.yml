@@ -197,6 +197,7 @@ jobs:
         timeout-minutes: 5
         run: |
           $H = 'npipe:////./pipe/dockup_engine'
+          $cname = "dockup-e2e-stdinmain-$env:GITHUB_RUN_ID"
           $o = echo hello | docker -H $H run --rm -i busybox sh -c 'read line; echo got:$line' 2>&1
           if (($o -join "`n") -notmatch 'got:hello') {
             Write-Output 'WARNING: stdin attempt 1 failed, forensics and retrying once'
@@ -213,6 +214,18 @@ jobs:
             $t = docker -H $H run --rm -t busybox echo tty-ok 2>&1
             if (($t -join "`n") -notmatch 'tty-ok') { throw "tty bridge failed twice: $t" }
           }
+          exit 0
+      - name: stdin loss direction probe (kept container)
+        timeout-minutes: 5
+        run: |
+          $H = 'npipe:////./pipe/dockup_engine'
+          $cname = "dockup-e2e-stdinloss-$env:GITHUB_RUN_ID"
+          $o = echo hello | docker -H $H run -i --name $cname busybox sh -c 'read line; echo got:$line' 2>&1
+          $joined = ($o -join "`n")
+          wsl -d dockup -u root -- docker inspect $cname --format '{{.State.Status}} exit={{.State.ExitCode}}'
+          wsl -d dockup -u root -- docker logs $cname 2>&1 | Out-String | Write-Output
+          docker -H $H rm -f $cname 2>$null | Out-Null
+          if ($joined -notmatch 'got:hello') { throw "stdin loss probe failed: [$joined]" }
           exit 0
       - name: exec and logs -f through the bridge
         timeout-minutes: 5
