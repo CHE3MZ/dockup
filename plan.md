@@ -681,6 +681,11 @@ server-side EOF — proven by `TestMessageModeCloseWriteEOF`), and teardown
 half-closes socat stdin on EOF, giving the container a 60s grace period to
 flush and exit instead of killing the bridge instantly. All prior flows
 stay green, so there was no regression.
+- Teardown tracks daemon→client bytes explicitly: on backend failure
+  with zero observed bytes the client gets HTTP 500 (fail loud, never
+  silent-empty); a parked stdin copy can no longer hide a dead backend
+  behind an "unknown" verdict — the bridge insists on the daemon-side
+  outcome (bounded) and logs it.
 
 ### 10.14 Hardware transparency + reinstall reproducibility
 
