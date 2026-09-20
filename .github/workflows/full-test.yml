@@ -231,9 +231,17 @@ jobs:
         run: |
           $H = 'npipe:////./pipe/dockup_engine'
           $cname = "dockup-e2e-catmain-$env:GITHUB_RUN_ID"
-          $o = echo probe-eof | docker -H $H run -i --name $cname busybox sh -c 'cat; echo MARKER'
+          $o = echo probe-eof | docker -H $H run -i --name $cname busybox sh -c 'cat; echo MARKER' 2>&1
+          if (($o -join "`n") -notmatch 'probe-eof[\s\S]*MARKER') {
+            Write-Output 'WARNING: cat attempt 1 failed, forensics and retrying once'
+            Get-Content "$env:APPDATA\dockup\logs\dockup.log" -Tail 20 -ErrorAction Continue
+            wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+            docker -H $H rm -f $cname 2>$null | Out-Null
+            $cname = "dockup-e2e-catmain2-$env:GITHUB_RUN_ID"
+            $o = echo probe-eof | docker -H $H run -i --name $cname busybox sh -c 'cat; echo MARKER' 2>&1
+            if (($o -join "`n") -notmatch 'probe-eof[\s\S]*MARKER') { throw "stdin EOF broken twice: [$o]" }
+          }
           docker -H $H rm -f $cname | Out-Null
-          if (($o -join "`n") -notmatch 'probe-eof[\s\S]*MARKER') { throw "stdin EOF broken: [$o]" }
           exit 0
       - name: autostart entry boots daemon after stop (login simulation)
         run: |
