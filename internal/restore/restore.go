@@ -116,12 +116,10 @@ func runLight() int {
 		}
 		logx.Ok("removed %d added package(s)", len(removal))
 	}
-	if err := docker.TestDaemon(distro); err != nil {
-		logx.Info("engine unhealthy, reinstalling engine packages...")
-		if err := docker.Install(distro); err != nil {
-			logx.Err("%v", err)
-			return 1
-		}
+	logx.Info("reinstalling engine packages...")
+	if err := docker.Install(distro); err != nil {
+		logx.Err("%v", err)
+		return 1
 	}
 	logx.Info("repairing config and services...")
 	note, err := docker.Repair(distro)
