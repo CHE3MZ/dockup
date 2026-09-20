@@ -50,34 +50,55 @@ func RemovalList(current, snapshot []string) []string {
 	return out
 }
 
+// Options configures a restore run. Arch/Path only apply to --full
+// (lightweight restores in place); empty means current settings.
+type Options struct {
+	Full bool
+	Arch string
+	Path string
+}
+
 // Run restores the distro; full selects the unregister+reinstall path.
-func Run(full bool) int {
+func Run(o Options) int {
 	distro := config.DistroName
 	if !wsl.Exists(distro) {
 		logx.Err("nothing to restore — run dockup setup first")
 		return 1
 	}
-	if full {
-		return runFull()
+	if o.Full {
+		return runFull(o)
 	}
 	return runLight()
 }
 
-func runFull() int {
-	st, _ := state.Load()
-	arch := st.Arch
+func runFull(o Options) int {
+	arch := o.Arch
+	if arch == "" {
+		arch, _ = stateArch()
+	}
 	if arch != "amd64" && arch != "arm64" {
 		arch = "amd64"
 	}
-	installDir := userconfig.InstallDir()
-	fmt.Printf("%s\n", ui.Yellow("This deletes the distro and reinstalls it from scratch."))
-	fmt.Printf("%s\n", ui.Yellow("Containers, images, and volumes will be destroyed."))
-	fmt.Printf("%s [y/n]\n", ui.White("Really restore with a full reinstall?"))
+	installDir := o.Path
+	if installDir == "" {
+		installDir = userconfig.InstallDir()
+	}
+	fmt.Printf("%s [y/n]\n", ui.Yellow("Are you sure you want to fully restore dockup? This will uninstall and reinstall the entire distro."))
 	if !readYes() {
 		logx.Info("aborted")
 		return 0
 	}
 	return setup.RunEx(setup.Options{Arch: arch, Path: installDir, Cfg: mustConfig()})
+}
+
+// stateArch reads the last successful setup arch without failing when
+// state.json is missing or corrupt (a full restore must not need it).
+func stateArch() (string, bool) {
+	st, err := state.Load()
+	if err != nil || (st.Arch != "amd64" && st.Arch != "arm64") {
+		return "", false
+	}
+	return st.Arch, true
 }
 
 func runLight() int {
@@ -102,7 +123,7 @@ func runLight() int {
 	}
 	fmt.Printf("%s\n", ui.White("  rewrite wsl.conf, reinstall engine packages, restart services"))
 	fmt.Printf("%s\n", ui.Yellow("  running containers will stop when the daemon restarts"))
-	fmt.Printf("%s [y/n]\n", ui.White("Restore the distro as described above?"))
+	fmt.Printf("%s [y/n]\n", ui.White("Are you sure you want to restore dockup? This will reinstall and uninstall some packages and will need an internet connection."))
 	if !readYes() {
 		logx.Info("aborted")
 		return 0

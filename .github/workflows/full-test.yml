@@ -310,7 +310,7 @@ jobs:
       - name: upgrade engine to latest
         timeout-minutes: 10
         run: |
-          .\dockup.exe upgrade
+          echo y | .\dockup.exe upgrade
           docker -H npipe:////./pipe/dockup_engine version
       - name: break the distro (junk pkg, missing dep, bad daemon.json)
         run: |
@@ -340,6 +340,7 @@ jobs:
             Remove-Item restore-out2.txt, restore-err2.txt
           }
           if ($o1 -notmatch 'cowsay') { throw 'attempt 1 never listed cowsay for removal' }
+          if ($o1 -notmatch 'internet connection') { throw 'confirm text missing from restore output' }
           wsl -d dockup -u root -- dpkg -s socat > $null
           if ($LASTEXITCODE -ne 0) { throw 'socat not back' }
           wsl -d dockup -u root -- test -f /etc/docker/daemon.json.bak

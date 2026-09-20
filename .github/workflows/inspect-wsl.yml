@@ -60,7 +60,7 @@ jobs:
       - name: upgrade engine to latest
         timeout-minutes: 10
         run: |
-          .\dockup.exe upgrade
+          echo y | .\dockup.exe upgrade
           $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
           if (!$srv) { throw 'no server version after upgrade' }
           .\dockup.exe doctor
@@ -98,8 +98,9 @@ jobs:
       - name: restore --full wipes and reinstalls
         timeout-minutes: 15
         run: |
-          "y","y" | .\dockup.exe restore --full
+          $o = "y","y" | .\dockup.exe restore --full 2>&1
           if ($LASTEXITCODE -ne 0) { throw "restore --full failed with $LASTEXITCODE" }
+          if (($o -join "`n") -notmatch 'uninstall and reinstall the entire distro') { throw 'full confirm text missing' }
           $imgs = wsl -d dockup -u root -- docker images -q
           if ($imgs) { throw "images survived full restore: $imgs" }
           $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'

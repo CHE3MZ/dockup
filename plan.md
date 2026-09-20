@@ -723,3 +723,8 @@ stay green, so there was no regression.
   skip once left a user-removed socat missing); install/upgrade
   scripts end with `apt-get clean` so repeated operations don't pile
   ~250MB of .debs into the ever-growing VHDX.
+- Confirmation safety: setup (fresh + reinstall), uninstall, restore,
+  restore --full (exact texts below), and upgrade all ask first and
+  stay scriptable via piped `y`; abort paths never mutate state.
+  `--full` accepts `--amd/--arm/--path` overrides and never requires
+  `state.json` (arch falls back through flags, state, amd64).

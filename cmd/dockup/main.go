@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -187,7 +188,7 @@ func usage() {
   ` + ui.Bold("dockup") + `                     Foreground run (Ctrl+C to stop)
   ` + ui.Bold("dockup setup") + `               Launch the interactive setup wizard
   ` + ui.Bold("dockup uninstall") + `           Uninstall the dockup distro from WSL
-  ` + ui.Bold("dockup restore [--full]") + `    Reset the distro to a clean state
+  ` + ui.Bold("dockup restore [--full]") + `      Reset the distro to a clean state
   ` + ui.Bold("dockup ps") + `                  Show dockup's status
   ` + ui.Bold("dockup daemon") + `              Start | Stop | Restart | Status
   ` + ui.Bold("dockup shutdown") + `            Stop everything
@@ -269,29 +270,57 @@ func restoreHelp() {
 
   With ` + ui.Bold("--full") + `, the distro is deleted and reinstalled
   from scratch: guaranteed pristine, but containers, images, and
-  volumes are destroyed.
+  volumes are destroyed. "--amd"/"--arm"/"--path" pick a different
+  architecture or install folder for the reinstall (defaults: last
+  setup's arch, current install folder).
 
 ` + ui.LightBlue("Usage:") + `
-  dockup restore [--full]
+  dockup restore [--full] [--amd|--arm] [--path=DIR]
 `)
 }
 
-// cmdRestore parses restore flags.
+// cmdRestore parses restore flags. --amd/--arm/--path only apply to
+// --full (lightweight restores in place).
 func cmdRestore(args []string) int {
 	if hasHelpFlag(args) {
 		restoreHelp()
 		return 0
 	}
-	full := false
-	for _, a := range args {
-		if a == "--full" {
+	var full, amd, arm bool
+	var pathFlag string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--full":
 			full = true
-		} else {
+		case a == "--amd":
+			amd = true
+		case a == "--arm":
+			arm = true
+		case a == "--path" && i+1 < len(args):
+			i++
+			pathFlag = args[i]
+		case strings.HasPrefix(a, "--path="):
+			pathFlag = strings.TrimPrefix(a, "--path=")
+		default:
 			logx.Err("unknown restore flag %q (try dockup restore --help)", a)
 			return 1
 		}
 	}
-	return restore.Run(full)
+	arch, msg := config.NormalizeArch(amd, arm)
+	if msg != "" {
+		logx.Err("%s", msg)
+		return 1
+	}
+	if (pathFlag != "" || amd || arm) && !full {
+		logx.Err("--path/--amd/--arm only apply to restore --full")
+		return 1
+	}
+	var archOverride string
+	if amd || arm {
+		archOverride = arch
+	}
+	return restore.Run(restore.Options{Full: full, Arch: archOverride, Path: pathFlag})
 }
 
 func psHelp() {
@@ -366,6 +395,13 @@ func cmdUpgrade() int {
 	if !s.Installed && !wsl.Exists(config.DistroName) {
 		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
 		return 1
+	}
+	fmt.Printf("%s [y/n]\n", ui.White("Upgrade the engine inside the dockup distro to the latest versions? This needs an internet connection."))
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
+	if l := strings.ToLower(strings.TrimSpace(line)); l != "y" && l != "yes" {
+		logx.Info("aborted")
+		return 0
 	}
 	fmt.Printf("%s\n", ui.White("upgrading docker engine inside dockup..."))
 	if err := docker.Upgrade(config.DistroName); err != nil {
