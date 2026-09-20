@@ -134,6 +134,7 @@ func runLight() int {
 	}
 	if err := docker.TestDaemon(distro); err != nil {
 		logx.Err("engine still unhealthy: %v (try dockup restore --full)", err)
+		logx.Err("distro state for triage:\n%s", triage(distro))
 		return 1
 	}
 	snap, _ := docker.ManualPackages(distro)
@@ -144,12 +145,20 @@ func runLight() int {
 	logx.Ok("restore complete — images, containers, and volumes are intact")
 	return 0
 }
-
 func readYes() bool {
 	r := bufio.NewReader(os.Stdin)
 	line, _ := r.ReadString('\n')
 	line = strings.ToLower(strings.TrimSpace(line))
 	return line == "y" || line == "yes"
+}
+
+// triage collects unit status + recent journal for a dead engine so a
+// failed restore tells the user WHY instead of just that it failed.
+func triage(distro string) string {
+	status, _ := wsl.Exec(distro, 15*time.Second, "systemctl", "status", "docker.service", "--no-pager")
+	journal, _ := wsl.ExecScript(distro, 15*time.Second, "journalctl -u docker.service --no-pager -n 15 || true")
+	return "--- systemctl status docker ---\n" + wsl.Tail(status, 1500) +
+		"\n--- journal (docker.service, last 15) ---\n" + wsl.Tail(journal, 2500)
 }
 
 func mustConfig() userconfig.Config {
