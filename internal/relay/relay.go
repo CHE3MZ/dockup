@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/CHE3MZ/dockup/internal/config"
+	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/userconfig"
 	"github.com/Microsoft/go-winio"
 )
@@ -277,6 +278,7 @@ func bridgeConn(client net.Conn, distro string) {
 	timer.Stop()
 	werr := cmd.Wait()
 	if werr != nil && daemonBytes(done) == 0 {
+		logx.Append(fmt.Sprintf("bridge: backend for %s died before output (%v)", distro, werr))
 		_, _ = fmt.Fprint(client, gatewayError)
 	}
 	dbg("bridge done (wait=%v)", werr)

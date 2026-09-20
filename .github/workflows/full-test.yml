@@ -236,6 +236,8 @@ jobs:
             Write-Output 'WARNING: cat attempt 1 failed, forensics and retrying once'
             Get-Content "$env:APPDATA\dockup\logs\dockup.log" -Tail 20 -ErrorAction Continue
             wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+            wsl -d dockup -u root -- docker ps -a --filter "name=$cname"
+            wsl -d dockup -u root -- docker logs $cname 2>&1 | Out-String | Write-Output
             docker -H $H rm -f $cname 2>$null | Out-Null
             $cname = "dockup-e2e-catmain2-$env:GITHUB_RUN_ID"
             $o = echo probe-eof | docker -H $H run -i --name $cname busybox sh -c 'cat; echo MARKER' 2>&1
