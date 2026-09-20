@@ -195,8 +195,14 @@ jobs:
         timeout-minutes: 5
         run: |
           $H = 'npipe:////./pipe/dockup_engine'
-          $o = echo hello | docker -H $H run --rm -i busybox sh -c 'read line; echo got:$line'
-          if (($o -join "`n") -notmatch 'got:hello') { throw "stdin bridge failed: $o" }
+          $o = echo hello | docker -H $H run --rm -i busybox sh -c 'read line; echo got:$line' 2>&1
+          if (($o -join "`n") -notmatch 'got:hello') {
+            Write-Output 'WARNING: stdin attempt 1 failed, forensics and retrying once'
+            Get-Content "$env:APPDATA\dockup\logs\dockup.log" -Tail 20 -ErrorAction Continue
+            wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+            $o = echo hello | docker -H $H run --rm -i busybox sh -c 'read line; echo got:$line' 2>&1
+            if (($o -join "`n") -notmatch 'got:hello') { throw "stdin bridge failed twice: $o" }
+          }
           $t = docker -H $H run --rm -t busybox echo tty-ok 2>&1
           if (($t -join "`n") -notmatch 'tty-ok') {
             Write-Output 'WARNING: tty attempt 1 empty, forensics and retrying once'
