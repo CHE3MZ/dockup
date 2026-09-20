@@ -720,4 +720,6 @@ stay green, so there was no regression.
   preceded by `systemctl reset-failed`, because repeated crashes put
   units into start-limit-hit where further restarts are silently
   refused; the engine set is ALWAYS reinstalled (an unhealthy-check
-  skip once left a user-removed socat missing).
+  skip once left a user-removed socat missing); install/upgrade
+  scripts end with `apt-get clean` so repeated operations don't pile
+  ~250MB of .debs into the ever-growing VHDX.

@@ -187,7 +187,7 @@ func usage() {
   ` + ui.Bold("dockup") + `                     Foreground run (Ctrl+C to stop)
   ` + ui.Bold("dockup setup") + `               Launch the interactive setup wizard
   ` + ui.Bold("dockup uninstall") + `           Uninstall the dockup distro from WSL
-  ` + ui.Bold("dockup restore [--full]") + `      Reset the distro to a clean state
+  ` + ui.Bold("dockup restore [--full]") + `    Reset the distro to a clean state
   ` + ui.Bold("dockup ps") + `                  Show dockup's status
   ` + ui.Bold("dockup daemon") + `              Start | Stop | Restart | Status
   ` + ui.Bold("dockup shutdown") + `            Stop everything

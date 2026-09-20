@@ -30,3 +30,15 @@ func TestRepairScriptsResetFailed(t *testing.T) {
 		}
 	}
 }
+
+func TestInstallScriptsCleanCache(t *testing.T) {
+	scripts := map[string]string{
+		"install": docker.InstallScript,
+		"upgrade": docker.UpgradeScript,
+	}
+	for name, s := range scripts {
+		if !strings.Contains(s, "apt-get clean") {
+			t.Fatalf("%s script leaves .debs in the apt cache", name)
+		}
+	}
+}
