@@ -640,12 +640,16 @@ no import, no unregister).
   and `full-test` header/value asserts.
 - `multi-distro.yml` (push + dispatch) proves production behavior with
   two plain neighbor distros: setup alongside them leaves their files,
-  workloads (`sleep`), and configs (`/etc/wsl.conf` must NOT leak)
-  untouched; daemon start keeps them running; switching via
-  `wsl -d <other>` doesn't break the bridge; `wsl --shutdown` drops
-  everything to `ps` = `starting...` and the distro self-heals to
-  `running` via systemd + on-demand boot; uninstall removes only
-  dockup (neighbors must remain) before final cleanup.
+  workloads (tracked by Windows PID, since minbase has no pgrep/ps),
+  and configs (`/etc/wsl.conf` must NOT leak) untouched; daemon start
+  keeps them running; switching via `wsl -d <other>` doesn't break
+  the bridge; `wsl --shutdown` drops everything to `ps` =
+  `starting...` (and kills the neighbor workloads) and the distro
+  self-heals to `running` via systemd + on-demand boot; uninstall
+  removes only dockup (neighbors must remain) before final cleanup.
+- The bridge answers HTTP 500 instead of silent EOF when the backend
+  dies before producing output, so spawn failures fail loudly and
+  retryably (`internal/relay.gatewayError`).
 
 ### 10.12 ARM coverage, uninstall semantics, dead code
 

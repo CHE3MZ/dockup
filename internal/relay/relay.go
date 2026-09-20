@@ -196,6 +196,31 @@ func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) er
 	}
 }
 
+// gatewayError is served when the backend dies before producing any output.
+// A loud protocol error beats silent EOF: the client fails retryably
+// instead of succeeding with empty output.
+const gatewayError = "HTTP/1.0 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+
+type sideResult struct {
+	side string
+	n    int64
+}
+
+// daemonBytes drains observed daemon->client byte counts from done.
+// Returns -1 when the daemon side never reported (unknown, not zero).
+func daemonBytes(done <-chan sideResult) int64 {
+	n := int64(-1)
+	for {
+		select {
+		case r := <-done:
+			if r.side == "stdout" {
+				n = r.n
+			}
+		default:
+			return n
+		}
+	}
+}
 func bridgeConn(client net.Conn, distro string) {
 	defer func() { _ = client.Close() }()
 	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--", // #nosec G204 -- fixed binary and argv; distro is our constant, never a shell
@@ -213,6 +238,7 @@ func bridgeConn(client net.Conn, distro string) {
 	cmd.Stderr = nil
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, "relay: wsl spawn:", err)
+		_, _ = fmt.Fprint(client, gatewayError)
 		return
 	}
 	dbg("bridge wsl pid %d", cmd.Process.Pid)
@@ -224,17 +250,17 @@ func bridgeConn(client net.Conn, distro string) {
 	// - stdin side finishes first: half-close downstream (socat propagates
 	//   stdin EOF to the daemon) and give the container a grace period to
 	//   flush output and exit before reaping.
-	done := make(chan string, 2)
+	done := make(chan sideResult, 2)
 	go func() {
 		_, _ = io.Copy(toProc, client)
 		_ = toProc.Close()
-		done <- "stdin"
+		done <- sideResult{side: "stdin"}
 	}()
 	go func() {
-		_, _ = io.Copy(client, fromProc)
-		done <- "stdout"
+		n, _ := io.Copy(client, fromProc)
+		done <- sideResult{side: "stdout", n: n}
 	}()
-	if first := <-done; first == "stdin" {
+	if first := <-done; first.side == "stdin" {
 		timer := time.NewTimer(60 * time.Second)
 		select {
 		case <-done:
@@ -250,5 +276,8 @@ func bridgeConn(client net.Conn, distro string) {
 	}
 	timer.Stop()
 	werr := cmd.Wait()
+	if werr != nil && daemonBytes(done) == 0 {
+		_, _ = fmt.Fprint(client, gatewayError)
+	}
 	dbg("bridge done (wait=%v)", werr)
 }
