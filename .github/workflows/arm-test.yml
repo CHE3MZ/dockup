@@ -3,23 +3,42 @@ on:
   push:
   workflow_dispatch:
 jobs:
-  arm:
-    # NOTE: plain windows-11-arm has no WSL preinstalled (wsl.exe missing
-    # entirely; enabling it needs a reboot CI cannot do). The VS2026 arm
-    # image is the current candidate that ships WSL.
-    runs-on: windows-11-vs2026-arm
-    timeout-minutes: 60
+  # Neither windows-11-arm nor windows-11-vs2026-arm ships WSL (wsl.exe is
+  # absent entirely; enabling it needs a reboot CI cannot do), so the
+  # install job below stays skipped until Microsoft adds WSL to an arm
+  # image. This job always proves the code COMPILES and passes unit tests
+  # as a native arm64 binary (go-winio, x/sys, our windows build tags).
+  arm-build:
+    runs-on: windows-11-arm
+    timeout-minutes: 20
+    outputs:
+      has_wsl: ${{ steps.probe.outputs.has_wsl }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - name: wsl version
-        run: wsl --version
-      - name: vet
-        run: go vet ./...
-      - name: unit tests
-        run: go test ./...
+      - name: probe WSL presence
+        id: probe
+        run: |
+          $hasWsl = $false
+          if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
+            wsl --version 2>$null
+            if ($LASTEXITCODE -eq 0) { $hasWsl = $true }
+          }
+          if ($hasWsl) { echo "has_wsl=true" >> $env:GITHUB_OUTPUT }
+          else { echo "has_wsl=false" >> $env:GITHUB_OUTPUT }
+          exit 0
+      - name: vet (arm64)
+        run: |
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'arm64'
+          go vet ./...
+      - name: unit tests (arm64 native)
+        run: |
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'arm64'
+          go test ./...
       - name: build (arm64 native)
         run: |
           $env:GOOS = 'windows'
@@ -30,6 +49,23 @@ jobs:
           $o = .\dockup.exe version
           if ($o -notmatch '[0-9a-f]{7}') { throw "unstamped version: $o" }
           exit 0
+  # Full --arm install. Skipped while arm images lack WSL; runs
+  # automatically once has_wsl flips true (no workflow change needed).
+  arm-install:
+    needs: arm-build
+    if: needs.arm-build.outputs.has_wsl == 'true'
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: build (arm64 native)
+        run: |
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'arm64'
+          go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
       - name: setup dockup (arm64)
         run: echo y | .\dockup.exe setup --arm
       - name: diagnose setup failure
