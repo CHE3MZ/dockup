@@ -57,3 +57,27 @@ func TestStateWithLock(t *testing.T) {
 		t.Fatal("unexpected")
 	}
 }
+
+func TestSnapshotRoundTrip(t *testing.T) {
+	withTempAppData(t)
+	s := state.State{
+		Installed: true,
+		Arch:      "amd64",
+		Snapshot:  state.Snapshot{At: "2026-01-01T00:00:00Z", Manual: []string{"curl", "docker-ce"}},
+	}
+	if err := state.Save(s); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := state.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Snapshot.Manual) != 2 || loaded.Snapshot.Manual[0] != "curl" {
+		t.Fatalf("got %+v", loaded.Snapshot)
+	}
+	// Old state files without a snapshot must load as empty, not error.
+	legacy := state.State{Installed: true}
+	if len(legacy.Snapshot.Manual) != 0 {
+		t.Fatal("fresh snapshot should be empty")
+	}
+}

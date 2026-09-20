@@ -694,3 +694,23 @@ stay green, so there was no regression.
   must reproduce the first install exactly. Caveat (by design, not a
   gap): the base rootfs branch and apt repo float, so installs months
   apart track upstream; bit-pinning would need locked versions.
+
+### 10.14 dockup restore (lightweight + --full)
+
+- `state.json` carries a `snapshot` (manual package names + timestamp)
+  captured at every successful setup. `dockup restore` diffs the live
+  manual set against it (`restore.RemovalList`, pure + unit-tested,
+  engine packages never removed, name-based so upgrades are safe),
+  removes user-added packages + autoremove orphans, reinstalls the
+  engine set when unhealthy, rewrites `wsl.conf`, restarts units, and
+  rescues a clobbering `/etc/docker/daemon.json` (backup to `.bak`,
+  only when the daemon refuses to start with it). Images, containers,
+  and volumes survive. No snapshot (pre-restore installs) falls back
+  to engine-only repair with a note.
+- `dockup restore --full` confirms data loss, then reuses the tested
+  setup reinstall path (arch + current path carried over).
+- CI: `full-test` breaks a distro (cowsay added, socat removed,
+  garbage daemon.json) and asserts restore removes cowsay, brings
+  socat back, backs daemon.json up, revives the engine, and keeps the
+  hello-world image; `inspect-wsl` asserts `--full` wipes images and
+  returns a healthy engine.

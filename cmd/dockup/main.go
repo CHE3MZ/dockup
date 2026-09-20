@@ -17,6 +17,7 @@ import (
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/pstable"
 	"github.com/CHE3MZ/dockup/internal/relay"
+	"github.com/CHE3MZ/dockup/internal/restore"
 	"github.com/CHE3MZ/dockup/internal/setup"
 	"github.com/CHE3MZ/dockup/internal/state"
 	"github.com/CHE3MZ/dockup/internal/sysinfo"
@@ -93,6 +94,8 @@ func run(args []string) int {
 			return 0
 		}
 		return setup.Uninstall()
+	case "restore":
+		return cmdRestore(args[1:])
 	case "ps":
 		if hasHelpFlag(args[1:]) {
 			psHelp()
@@ -184,6 +187,7 @@ func usage() {
   ` + ui.Bold("dockup") + `                     Foreground run (Ctrl+C to stop)
   ` + ui.Bold("dockup setup") + `               Launch the interactive setup wizard
   ` + ui.Bold("dockup uninstall") + `           Uninstall the dockup distro from WSL
+  ` + ui.Bold("dockup restore [--full]") + `      Reset the distro to a clean state
   ` + ui.Bold("dockup ps") + `                  Show dockup's status
   ` + ui.Bold("dockup daemon") + `              Start | Stop | Restart | Status
   ` + ui.Bold("dockup shutdown") + `            Stop everything
@@ -202,6 +206,8 @@ func helpTopic(name string) int {
 		setupHelp()
 	case "uninstall":
 		uninstallHelp()
+	case "restore":
+		restoreHelp()
 	case "ps":
 		psHelp()
 	case "daemon":
@@ -250,6 +256,42 @@ func uninstallHelp() {
 ` + ui.LightBlue("Usage:") + `
   dockup uninstall
 `)
+}
+
+func restoreHelp() {
+	fmt.Print(ui.Header("dockup restore") + `
+  Reset a tampered-with distro to its default state. The lightweight
+  default removes packages added since setup, reinstalls the engine if
+  needed, rewrites managed configs (a broken daemon.json is kept as
+  daemon.json.bak), and restarts services. Images, containers, and
+  volumes are preserved. For engine-only repair without touching
+  packages, use dockup doctor --fix instead.
+
+  With ` + ui.Bold("--full") + `, the distro is deleted and reinstalled
+  from scratch: guaranteed pristine, but containers, images, and
+  volumes are destroyed.
+
+` + ui.LightBlue("Usage:") + `
+  dockup restore [--full]
+`)
+}
+
+// cmdRestore parses restore flags.
+func cmdRestore(args []string) int {
+	if hasHelpFlag(args) {
+		restoreHelp()
+		return 0
+	}
+	full := false
+	for _, a := range args {
+		if a == "--full" {
+			full = true
+		} else {
+			logx.Err("unknown restore flag %q (try dockup restore --help)", a)
+			return 1
+		}
+	}
+	return restore.Run(full)
 }
 
 func psHelp() {

@@ -231,10 +231,15 @@ func RunEx(o Options) int {
 	}
 	logx.Info("test results : success")
 
+	// Snapshot the package set so restore can later tell user-added
+	// packages apart. Best-effort: an empty snapshot just means restore
+	// falls back to engine-only repair.
+	snap, _ := docker.ManualPackages(config.DistroName)
 	_ = state.WithLock(func(s *state.State) error {
 		s.Installed = true
 		s.Arch = arch
 		s.SetupAt = time.Now().UTC().Format(time.RFC3339)
+		s.Snapshot = state.Snapshot{At: time.Now().UTC().Format(time.RFC3339), Manual: snap}
 		return nil
 	})
 	// Remember the used path as both default (prefilled next time) and

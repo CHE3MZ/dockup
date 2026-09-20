@@ -88,6 +88,23 @@ jobs:
           $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
           if (!$srv) { throw 'engine still down after fix' }
           .\dockup.exe doctor
+      - name: pull witness image
+        run: |
+          wsl -d dockup -u root -- docker pull hello-world
+          if ($LASTEXITCODE -ne 0) { throw 'witness pull failed' }
+          $q = wsl -d dockup -u root -- docker images -q hello-world
+          if (!$q) { throw 'no witness image' }
+          exit 0
+      - name: restore --full wipes and reinstalls
+        timeout-minutes: 15
+        run: |
+          "y","y" | .\dockup.exe restore --full
+          if ($LASTEXITCODE -ne 0) { throw "restore --full failed with $LASTEXITCODE" }
+          $imgs = wsl -d dockup -u root -- docker images -q
+          if ($imgs) { throw "images survived full restore: $imgs" }
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          if (!$srv) { throw 'engine dead after full restore' }
+          exit 0
       - name: shutdown and uninstall
         run: |
           .\dockup.exe shutdown

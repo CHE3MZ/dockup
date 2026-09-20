@@ -18,12 +18,21 @@ type Daemon struct {
 	StartedAt string `json:"startedAt"`
 }
 
+// Snapshot records the distro's explicitly-installed package set right
+// after a successful setup, so restore can tell user-added packages apart
+// from dockup's own. Name-based (versions may legitimately move).
+type Snapshot struct {
+	At     string   `json:"at"`
+	Manual []string `json:"manual"`
+}
+
 // State is the whole file.
 type State struct {
-	Installed bool   `json:"installed"`
-	Arch      string `json:"arch"`
-	SetupAt   string `json:"setupAt"`
-	Daemon    Daemon `json:"daemon"`
+	Installed bool     `json:"installed"`
+	Arch      string   `json:"arch"`
+	SetupAt   string   `json:"setupAt"`
+	Daemon    Daemon   `json:"daemon"`
+	Snapshot  Snapshot `json:"snapshot"`
 }
 
 // Load reads state.json. Missing file returns zero State, nil error.

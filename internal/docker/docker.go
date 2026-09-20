@@ -4,6 +4,7 @@ package docker
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -98,4 +99,69 @@ func Upgrade(distro string) error {
 		return err
 	}
 	return TestDaemon(distro)
+}
+
+// EnginePackages is the dockup-managed set: always reinstalled by repair,
+// never removed by restore's delta cleanup.
+var EnginePackages = []string{
+	"docker-ce", "docker-ce-cli", "containerd.io",
+	"docker-buildx-plugin", "docker-compose-plugin", "socat",
+}
+
+// ManualPackages lists explicitly-installed packages (apt-mark showmanual),
+// sorted for stable snapshots.
+func ManualPackages(distro string) ([]string, error) {
+	out, err := wsl.Exec(distro, 60*time.Second, "apt-mark", "showmanual")
+	if err != nil {
+		return nil, fmt.Errorf("apt-mark showmanual: %w", err)
+	}
+	var names []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if name := strings.TrimSpace(line); name != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// RepairScript rewrites managed config and restarts units without rebooting.
+const RepairScript = `set -eu
+printf '[boot]\nsystemd=true\n' > /etc/wsl.conf
+systemctl enable containerd.service
+systemctl enable docker.service
+systemctl restart containerd.service || true
+systemctl restart docker.service || true
+`
+
+// Repair restores managed config and a working engine without rebooting,
+// unless PID 1 is not systemd (then it reboots like Configure). A clobbered
+// /etc/docker/daemon.json is backed up to daemon.json.bak and reset, but
+// only when the daemon refuses to start with it. Returns a note describing
+// any extra rescue performed ("" when it was a plain repair).
+func Repair(distro string) (string, error) {
+	if _, err := wsl.ExecScript(distro, 3*time.Minute, RepairScript); err != nil {
+		return "", fmt.Errorf("repair config: %w", err)
+	}
+	if out, err := wsl.Exec(distro, 30*time.Second, "sh", "-c", "ps -p 1 -o comm="); err == nil && !strings.Contains(string(out), "systemd") {
+		_ = wsl.Terminate(distro)
+		time.Sleep(3 * time.Second)
+	}
+	if err := TestDaemon(distro); err == nil {
+		return "", nil
+	}
+	if _, serr := wsl.Exec(distro, 15*time.Second, "sh", "-c", "test -f /etc/docker/daemon.json"); serr == nil {
+		rescue := `set -eu
+cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
+rm /etc/docker/daemon.json
+systemctl restart docker.service || true`
+		_, _ = wsl.ExecScript(distro, 2*time.Minute, rescue)
+		if err := TestDaemon(distro); err == nil {
+			return "reset /etc/docker/daemon.json (yours is kept at daemon.json.bak)", nil
+		}
+	}
+	if err := TestDaemon(distro); err != nil {
+		return "", fmt.Errorf("engine still unhealthy after repair: %w (try dockup restore --full)", err)
+	}
+	return "", nil
 }

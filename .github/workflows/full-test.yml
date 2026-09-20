@@ -40,6 +40,8 @@ jobs:
           .\dockup.exe daemon --help
           .\dockup.exe shutdown --help
           .\dockup.exe doctor --help
+          .\dockup.exe restore --help
+          .\dockup.exe help restore
           .\dockup.exe version
       - name: dry run changes nothing
         run: |
@@ -297,6 +299,31 @@ jobs:
         run: |
           .\dockup.exe upgrade
           docker -H npipe:////./pipe/dockup_engine version
+      - name: break the distro (junk pkg, missing dep, bad daemon.json)
+        run: |
+          wsl -d dockup -u root -- apt-get update
+          if ($LASTEXITCODE -ne 0) { throw 'apt update failed' }
+          wsl -d dockup -u root -- apt-get install -y cowsay
+          if ($LASTEXITCODE -ne 0) { throw 'cowsay install failed' }
+          wsl -d dockup -u root -- apt-get remove -y socat
+          if ($LASTEXITCODE -ne 0) { throw 'socat remove failed' }
+          echo garbage | wsl -d dockup -u root -- tee /etc/docker/daemon.json > $null
+          exit 0
+      - name: restore repairs, keeps data
+        timeout-minutes: 10
+        run: |
+          $o = echo y | .\dockup.exe restore 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "restore failed: $o" }
+          if (($o -join "`n") -notmatch 'cowsay') { throw "removal list missing cowsay: $o" }
+          wsl -d dockup -u root -- dpkg -s socat > $null
+          if ($LASTEXITCODE -ne 0) { throw 'socat not back' }
+          wsl -d dockup -u root -- test -f /etc/docker/daemon.json.bak
+          if ($LASTEXITCODE -ne 0) { throw 'daemon.json backup missing (rescue never ran?)' }
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          if (!$srv) { throw 'engine dead after restore' }
+          $imgs = docker -H npipe:////./pipe/dockup_engine images -q hello-world
+          if (!$imgs) { throw 'hello-world image lost (data not preserved)' }
+          exit 0
       - name: daemon stop
         run: .\dockup.exe daemon stop
       - name: foreground run serves the bridge
