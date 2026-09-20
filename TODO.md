@@ -2,7 +2,7 @@
 
 ---
 
-- [ WIP ] **add a restore command to restore the distro to its default state. this should help fix any potentially unwanted modifications having been made to distro get rest, command name should be "dockup restore" and it should have a lightweight solution to restoring stuff, it should not be heavy. --this feature is important and should be considered at some point when the rest of the stuff is done.**
+- [✔] **add a restore command to restore the distro to its default state. this should help fix any potentially unwanted modifications having been made to distro get rest, command name should be "dockup restore" and it should have a lightweight solution to restoring stuff, it should not be heavy. --this feature is important and should be considered at some point when the rest of the stuff is done.**
 
 - [✗] **move the "installed" variable from .dockup/config.json to .dockup/installation.json**
 
