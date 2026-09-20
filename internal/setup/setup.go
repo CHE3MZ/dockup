@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CHE3MZ/dockup/internal/autostart"
 	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/docker"
 	"github.com/CHE3MZ/dockup/internal/download"
@@ -289,30 +290,39 @@ func currentInstallDir() string {
 	return config.WslInstallDir()
 }
 
-// Uninstall removes the distro after confirmation.
+// Uninstall removes the distro after confirmation. Idempotent: if the
+// distro is already gone it still cleans state and succeeds. A successful
+// uninstall also disables login autostart (entry + flag) so no dangling
+// boot task remains; default_path is kept for the next setup.
 func Uninstall() int {
 	if !askYesNo("Delete the dockup distro and all of its files?") {
 		logx.Info("aborted")
 		return 0
 	}
 	_ = wsl.Terminate(config.DistroName)
-	if err := wsl.Unregister(config.DistroName); err != nil {
-		logx.Err("unregister: %v", err)
-		return 1
+	if wsl.Exists(config.DistroName) {
+		if err := wsl.Unregister(config.DistroName); err != nil {
+			logx.Err("unregister: %v", err)
+			return 1
+		}
+	} else {
+		logx.Info("distro already gone, cleaning up the rest")
 	}
 	_ = state.WithLock(func(s *state.State) error {
 		*s = state.State{}
 		return nil
 	})
 	_ = os.RemoveAll(currentInstallDir())
-	// Keep default_path for the next setup; the distro is gone so both
-	// current_path and installed go away with it.
+	// Keep default_path for the next setup; everything else goes away,
+	// including login autostart.
 	if cfg, err := userconfig.Load(); err == nil {
 		cfg = cfg.WithDefaults()
 		cfg.CurrentPath = ""
 		cfg.Installed = false
+		cfg.Autostart = false
 		_ = userconfig.Save(cfg)
 	}
+	_ = autostart.SetEnabled("", false)
 	logx.Ok("dockup uninstalled")
 	return 0
 }

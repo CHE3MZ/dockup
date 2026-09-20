@@ -18,12 +18,8 @@ import (
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
-// Run checks everything, repairs stale daemon PIDs, reports fixed vs attention.
-func Run() error { return RunEx(false) }
-
-// RunEx is Run plus optional remediation: with fix=true a missing or broken
-// in-distro engine is reinstalled/reconfigured (repo, packages, systemd
-// units, wsl.conf) and re-verified.
+// RunEx is the doctor entry point: checks everything, repairs stale state,
+// and with fix=true reinstalls/reconfigures a broken in-distro engine.
 func RunEx(fix bool) error {
 	fail := 0
 	ok := func(name string) { logx.Ok("ok: %s", name) }

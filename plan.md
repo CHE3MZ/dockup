@@ -627,6 +627,23 @@ no import, no unregister).
   the foreign-pipe `ps` branch (a .NET pipe holder) and
   restart-without-setup.
 
+### 10.12 ARM coverage, uninstall semantics, dead code
+
+- `arm-test.yml` (push + dispatch) runs on `windows-11-arm`: native
+  arm64 build, `setup --arm`, doctor, daemon lifecycle, `ps` showing
+  `running` (EngineReady through the pipe = bridge proof without a
+  Windows docker CLI), in-distro arm64 `hello-world`, optional pipe
+  `version` when a Windows docker CLI exists, then stop/shutdown/
+  uninstall. amd64 suites keep covering flags/TCP/autostart/upgrade.
+- Uninstall now also removes the Startup entry and sets
+  `autostart=false` (no dangling boot task), and is idempotent: a
+  missing distro still cleans state and exits 0 (previously exit 1
+  with state kept). Covered in `full-test`.
+- Removed dead exported wrappers nothing called (`relay.Serve`,
+  default-pipe `Alive`/`WaitAlive`/`WaitDead`, `doctor.Run`,
+  `state.ClearDaemon`); `ServeEx`/`*On`/`RunEx` are the entries.
+  `download.Fetch` carries a 30-minute overall timeout instead of none.
+
 ### 10.9 Bridge I/O coverage + stdin-EOF fix (done)
 
 `full-test.yml` covers: piped stdin bytes (`run -i ... read`), stdin EOF

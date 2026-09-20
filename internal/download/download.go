@@ -28,8 +28,10 @@ func Size(url string) int64 {
 }
 
 // Fetch streams url to dest, calling onProgress roughly every 500ms.
+// The client carries an overall timeout so a stalled connection cannot hang
+// setup forever.
 func Fetch(url, dest string, onProgress Progress) error {
-	client := &http.Client{Timeout: 0}
+	client := &http.Client{Timeout: 30 * time.Minute}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err

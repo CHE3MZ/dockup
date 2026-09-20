@@ -45,10 +45,6 @@ func AliveOn(pipe string) bool {
 	return true
 }
 
-// Alive dials the default pipe. True = something holds the name
-// (ours or foreign — callers must check state before attaching).
-func Alive() bool { return AliveOn(PipeName) }
-
 // TCPAlive dials a TCP bridge address (e.g. 127.0.0.1:2375).
 func TCPAlive(addr string) bool {
 	c, err := net.DialTimeout("tcp", addr, 2*time.Second)
@@ -98,11 +94,6 @@ func ParsePingOK(head []byte) bool {
 	return false
 }
 
-// WaitAlive polls until the default pipe answers or timeout elapses.
-func WaitAlive(timeout time.Duration) bool {
-	return WaitAliveOn(PipeName, timeout)
-}
-
 // WaitAliveOn polls a specific pipe.
 func WaitAliveOn(pipe string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
@@ -115,11 +106,6 @@ func WaitAliveOn(pipe string, timeout time.Duration) bool {
 	return false
 }
 
-// WaitDead polls until the default pipe stops answering or timeout elapses.
-func WaitDead(timeout time.Duration) bool {
-	return WaitDeadOn(PipeName, timeout)
-}
-
 // WaitDeadOn polls a specific pipe.
 func WaitDeadOn(pipe string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
@@ -130,11 +116,6 @@ func WaitDeadOn(pipe string, timeout time.Duration) bool {
 		time.Sleep(200 * time.Millisecond)
 	}
 	return false
-}
-
-// Serve blocks serving the default pipe only (no TCP). Kept for compat.
-func Serve(ctx context.Context, distro string) error {
-	return ServeEx(ctx, distro, PipeName, false, userconfig.DefaultPort)
 }
 
 // ServeEx serves pipe plus, when useTCP is true, a 127.0.0.1:port bridge.

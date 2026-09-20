@@ -58,11 +58,6 @@ func Save(s State) error {
 	return os.Rename(tmp, config.StateFile())
 }
 
-// ClearDaemon zeroes the daemon record.
-func ClearDaemon(s *State) {
-	s.Daemon = Daemon{}
-}
-
 // WithLock serializes read-modify-write via a lockfile with retries.
 // Portable (no syscalls): create-exclusive + stale-age expiry.
 func WithLock(fn func(s *State) error) error {

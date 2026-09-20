@@ -325,7 +325,15 @@ jobs:
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.current_path) { throw "current_path not cleared: $($c.current_path)" }
           if ($c.installed -ne $false) { throw 'installed not cleared on uninstall' }
+          if ($c.autostart -ne $false) { throw 'autostart not cleared on uninstall' }
+          $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
+          if (Test-Path $lnk) { throw 'startup entry left behind by uninstall' }
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path not retained: $($c.default_path)" }
+      - name: second uninstall succeeds (idempotent)
+        run: |
+          echo y | .\dockup.exe uninstall
+          if ($LASTEXITCODE -ne 0) { throw "expected exit 0, got $LASTEXITCODE" }
+          exit 0
       - name: daemon refuses start when nothing installed
         run: |
           .\dockup.exe daemon autostart on

@@ -1,0 +1,72 @@
+name: arm-test
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  arm:
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: wsl version
+        run: wsl --version
+      - name: vet
+        run: go vet ./...
+      - name: unit tests
+        run: go test ./...
+      - name: build (arm64 native)
+        run: |
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'arm64'
+          go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
+      - name: version is stamped with commit
+        run: |
+          $o = .\dockup.exe version
+          if ($o -notmatch '[0-9a-f]{7}') { throw "unstamped version: $o" }
+          exit 0
+      - name: setup dockup (arm64)
+        run: echo y | .\dockup.exe setup --arm
+      - name: diagnose setup failure
+        if: failure()
+        continue-on-error: true
+        run: |
+          Get-Item $env:TEMP\dockup-* -ErrorAction Continue | Select-Object FullName, Length
+          wsl --list --verbose
+      - name: doctor after setup
+        run: .\dockup.exe doctor
+      - name: daemon start
+        run: .\dockup.exe daemon start
+      - name: daemon status
+        run: .\dockup.exe daemon status
+      - name: ps shows running (bridge proven without Windows docker CLI)
+        run: |
+          $ps = ''
+          for ($i = 0; $i -lt 5 -and $ps -notmatch 'running'; $i++) {
+            $ps = (.\dockup.exe ps) -join "`n"
+            Start-Sleep 3
+          }
+          if ($ps -notmatch 'running') { throw "bridge not serving engine: [$ps]" }
+          exit 0
+      - name: hello-world inside the distro (arm64 image)
+        timeout-minutes: 10
+        run: |
+          wsl -d dockup -u root -- docker run --rm hello-world
+          if ($LASTEXITCODE -ne 0) { throw 'in-distro hello-world failed' }
+          exit 0
+      - name: pipe version if Windows docker CLI present
+        run: |
+          if (Get-Command docker -ErrorAction SilentlyContinue) { docker -H npipe:////./pipe/dockup_engine version }
+          else { Write-Output 'no Windows docker CLI on this runner; bridge proven via ps EngineReady + in-distro run' }
+          exit 0
+      - name: daemon stop
+        run: .\dockup.exe daemon stop
+      - name: shutdown and uninstall
+        run: |
+          .\dockup.exe shutdown
+          echo y | .\dockup.exe uninstall
+          $list = ((wsl --list --quiet) -join "`n") -replace "`0", ""
+          if ($list -match 'dockup') { throw 'distro still present' }
+          exit 0
