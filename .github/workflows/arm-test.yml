@@ -4,7 +4,10 @@ on:
   workflow_dispatch:
 jobs:
   arm:
-    runs-on: windows-11-arm
+    # NOTE: plain windows-11-arm has no WSL preinstalled (wsl.exe missing
+    # entirely; enabling it needs a reboot CI cannot do). The VS2026 arm
+    # image is the current candidate that ships WSL.
+    runs-on: windows-11-vs2026-arm
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
