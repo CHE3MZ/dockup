@@ -6,7 +6,7 @@
 
 - [✔] **move the "installed" variable from .dockup/config.json to .dockup/state.json**
 
-- [ WIP ] **small change : using the assets/icon-black.png or assets/icon-white.png as the exe build icon.**
+- [✔] **small change : using the assets/icon-black.png or assets/appicon.png as the exe build icon.**
 
 - [✗] **add a browser web UI using Vue 3 + Vite + Vue Vapor feature , bun for build test , net/http + embed for bridge , served to host at localhost:8060 ( experimental - should not be implemented yet until everything works. )**
 
