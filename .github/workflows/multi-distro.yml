@@ -43,8 +43,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'extra1 marker gone' }
           wsl -d dockup-extra2 -u root -- ls /root/extra2-marker
           if ($LASTEXITCODE -ne 0) { throw 'extra2 marker gone' }
-          wsl -d dockup-extra1 -u root -- pgrep -f 'sleep 300' | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw 'extra1 workload killed by setup' }
+          $procs = (wsl -d dockup-extra1 -u root -- ps -eo args) -join "`n"
+          if ($procs -notmatch 'sleep 300') { throw 'extra1 workload killed by setup' }
           wsl -d dockup-extra1 -u root -- test -e /etc/wsl.conf
           if ($LASTEXITCODE -eq 0) { throw 'setup leaked wsl.conf into neighbor' }
           exit 0
@@ -56,8 +56,8 @@ jobs:
           foreach ($d in @('dockup', 'dockup-extra1', 'dockup-extra2')) {
             if ($running -notmatch $d) { throw "$d not running: [$running]" }
           }
-          wsl -d dockup-extra2 -u root -- pgrep -f 'sleep 300' | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw 'extra2 workload killed by daemon start' }
+          $procs = (wsl -d dockup-extra2 -u root -- ps -eo args) -join "`n"
+          if ($procs -notmatch 'sleep 300') { throw 'extra2 workload killed by daemon start' }
           exit 0
       - name: switching distros does not break the bridge
         run: |
