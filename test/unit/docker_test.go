@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -15,5 +16,17 @@ func TestWaitDaemonTimeout(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed < 5*time.Second {
 		t.Fatalf("returned too fast (%v), not actually waiting", elapsed)
+	}
+}
+
+func TestRepairScriptsResetFailed(t *testing.T) {
+	scripts := map[string]string{
+		"configure": docker.ConfigureScript,
+		"repair":    docker.RepairScript,
+	}
+	for name, s := range scripts {
+		if !strings.Contains(s, "reset-failed") {
+			t.Fatalf("%s script lost its reset-failed guard", name)
+		}
 	}
 }

@@ -28,6 +28,7 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 // ConfigureScript enables systemd units for containerd + docker.
 const ConfigureScript = `set -eu
 printf '[boot]\nsystemd=true\n' > /etc/wsl.conf
+systemctl reset-failed containerd.service docker.service docker.socket || true
 systemctl enable containerd.service
 systemctl enable docker.service
 systemctl start containerd.service || true
@@ -141,8 +142,12 @@ func ManualPackages(distro string) ([]string, error) {
 }
 
 // RepairScript rewrites managed config and restarts units without rebooting.
+// reset-failed comes first: after repeated crashes systemd refuses further
+// restarts ("start request repeated too quickly") until the failure state
+// is cleared — without it, repair restarts are silently refused.
 const RepairScript = `set -eu
 printf '[boot]\nsystemd=true\n' > /etc/wsl.conf
+systemctl reset-failed containerd.service docker.service docker.socket || true
 systemctl enable containerd.service
 systemctl enable docker.service
 systemctl restart containerd.service || true
@@ -169,6 +174,7 @@ func Repair(distro string) (string, error) {
 		rescue := `set -eu
 cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
 rm /etc/docker/daemon.json
+systemctl reset-failed docker.service docker.socket || true
 systemctl restart docker.service || true`
 		_, _ = wsl.ExecScript(distro, 2*time.Minute, rescue)
 		if err := WaitDaemon(distro, 90*time.Second); err == nil {
