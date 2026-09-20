@@ -277,19 +277,6 @@ func sizeOf(url string) string {
 	return "size unknown"
 }
 
-// currentInstallDir returns where the distro lives: stored current_path,
-// falling back to the legacy default for pre-config installs.
-func currentInstallDir() string {
-	cfg, _ := userconfig.Load()
-	cfg = cfg.WithDefaults()
-	if strings.TrimSpace(cfg.CurrentPath) != "" {
-		if p, err := userconfig.NormalizePath(cfg.CurrentPath); err == nil {
-			return filepath.FromSlash(p)
-		}
-	}
-	return config.WslInstallDir()
-}
-
 // Uninstall removes the distro after confirmation. Idempotent: if the
 // distro is already gone it still cleans state and succeeds. A successful
 // uninstall also disables login autostart (entry + flag) so no dangling
@@ -312,7 +299,7 @@ func Uninstall() int {
 		*s = state.State{}
 		return nil
 	})
-	_ = os.RemoveAll(currentInstallDir())
+	_ = os.RemoveAll(userconfig.InstallDir())
 	// Keep default_path for the next setup; everything else goes away,
 	// including login autostart.
 	if cfg, err := userconfig.Load(); err == nil {

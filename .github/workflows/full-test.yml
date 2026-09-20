@@ -136,9 +136,10 @@ jobs:
           $o = .\dockup.exe daemon autostart
           if ($o -notmatch 'autostart: off') { throw "query = $o" }
           $ps = (.\dockup.exe ps) -join "`n"
-          foreach ($want in @('STATUS', 'AUTOSTART', 'off')) {
+          foreach ($want in @('STATUS', 'AUTOSTART', 'INSTALLED', 'SIZE', 'MEMORY', 'off')) {
             if ($ps -notmatch $want) { throw "ps missing ${want}: $ps" }
           }
+          if ($ps -notmatch '[\d.]+ (MB|GB)') { throw "ps missing size/memory values: $ps" }
       - name: autostart on persists to config and Startup entry
         run: |
           .\dockup.exe daemon autostart on

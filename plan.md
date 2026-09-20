@@ -627,6 +627,26 @@ no import, no unregister).
   the foreign-pipe `ps` branch (a .NET pipe holder) and
   restart-without-setup.
 
+### 10.13 Five-column ps + multi-distro production test
+
+- `dockup ps` renders `STATUS AUTOSTART INSTALLED SIZE MEMORY`
+  (bold headers, plain values): `INSTALLED` is yes/no from the config
+  flag; `SIZE` sums the install dir (ext4.vhdx included) as `N MB`
+  below 1 GiB else `N.N GB` (`-` when not installed); `MEMORY` sums
+  all `dockup.exe` working sets (minus self, via tasklist CSV parsed
+  digits-only so locale separators can't break it) plus in-distro
+  dockerd/containerd/socat RSS (`-` when stopped). Implemented in
+  `internal/sysinfo` (no new deps, no unsafe); covered by unit tests
+  and `full-test` header/value asserts.
+- `multi-distro.yml` (push + dispatch) proves production behavior with
+  two plain neighbor distros: setup alongside them leaves their files,
+  workloads (`sleep`), and configs (`/etc/wsl.conf` must NOT leak)
+  untouched; daemon start keeps them running; switching via
+  `wsl -d <other>` doesn't break the bridge; `wsl --shutdown` drops
+  everything to `ps` = `starting...` and the distro self-heals to
+  `running` via systemd + on-demand boot; uninstall removes only
+  dockup (neighbors must remain) before final cleanup.
+
 ### 10.12 ARM coverage, uninstall semantics, dead code
 
 - `arm-test.yml` (push + dispatch) runs on `windows-11-arm`: native

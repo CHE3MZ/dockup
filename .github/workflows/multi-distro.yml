@@ -1,0 +1,105 @@
+name: multi-distro
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  multi:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: build
+        run: go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
+      - name: import two plain neighbor distros
+        run: |
+          curl.exe -L -o $env:TEMP\dockup-extra.tar.gz https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-amd64/bookworm/oci/blobs/rootfs.tar.gz
+          New-Item -ItemType Directory -Force C:\multi-extra1, C:\multi-extra2 | Out-Null
+          wsl --import dockup-extra1 C:\multi-extra1 $env:TEMP\dockup-extra.tar.gz --version 2
+          wsl --import dockup-extra2 C:\multi-extra2 $env:TEMP\dockup-extra.tar.gz --version 2
+          Remove-Item $env:TEMP\dockup-extra.tar.gz -Force
+          exit 0
+      - name: neighbors run user workloads
+        run: |
+          wsl -d dockup-extra1 -u root -- touch /root/extra1-marker
+          wsl -d dockup-extra2 -u root -- touch /root/extra2-marker
+          Start-Process wsl.exe -ArgumentList '-d','dockup-extra1','--','sleep','300' -WindowStyle Hidden
+          Start-Process wsl.exe -ArgumentList '-d','dockup-extra2','--','sleep','300' -WindowStyle Hidden
+          Start-Sleep 5
+          $running = (wsl --list --running --quiet) -join "`n" -replace "`0", ""
+          if ($running -notmatch 'dockup-extra1' -or $running -notmatch 'dockup-extra2') { throw "neighbors not running: [$running]" }
+          exit 0
+      - name: setup dockup alongside neighbors
+        run: echo y | .\dockup.exe setup --amd --path="C:\dockup-multi"
+      - name: neighbors untouched by setup
+        run: |
+          $list = ((wsl --list --quiet) -join "`n") -replace "`0", ""
+          foreach ($d in @('dockup', 'dockup-extra1', 'dockup-extra2')) {
+            if ($list -notmatch $d) { throw "$d missing from list: [$list]" }
+          }
+          wsl -d dockup-extra1 -u root -- ls /root/extra1-marker
+          if ($LASTEXITCODE -ne 0) { throw 'extra1 marker gone' }
+          wsl -d dockup-extra2 -u root -- ls /root/extra2-marker
+          if ($LASTEXITCODE -ne 0) { throw 'extra2 marker gone' }
+          wsl -d dockup-extra1 -u root -- pgrep -f 'sleep 300' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'extra1 workload killed by setup' }
+          wsl -d dockup-extra1 -u root -- test -e /etc/wsl.conf
+          if ($LASTEXITCODE -eq 0) { throw 'setup leaked wsl.conf into neighbor' }
+          exit 0
+      - name: daemon start leaves neighbors running
+        run: |
+          .\dockup.exe daemon start
+          .\dockup.exe daemon status
+          $running = ((wsl --list --running --quiet) -join "`n") -replace "`0", ""
+          foreach ($d in @('dockup', 'dockup-extra1', 'dockup-extra2')) {
+            if ($running -notmatch $d) { throw "$d not running: [$running]" }
+          }
+          wsl -d dockup-extra2 -u root -- pgrep -f 'sleep 300' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'extra2 workload killed by daemon start' }
+          exit 0
+      - name: switching distros does not break the bridge
+        run: |
+          $sw = wsl -d dockup-extra1 -u root -- echo switched
+          if (($sw -join "`n") -notmatch 'switched') { throw 'distro switch failed' }
+          docker -H npipe:////./pipe/dockup_engine version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'bridge broken after distro switch' }
+          exit 0
+      - name: wsl --shutdown stops all, ps shows starting
+        run: |
+          wsl --shutdown
+          Start-Sleep 5
+          $ps = (.\dockup.exe ps) -join "`n"
+          if ($ps -notmatch 'starting\.\.\.') { throw "expected starting..., got: [$ps]" }
+          exit 0
+      - name: distro self-heals after shutdown
+        run: |
+          $ps = ''
+          for ($i = 0; $i -lt 45 -and $ps -notmatch 'running'; $i++) {
+            $ps = (.\dockup.exe ps) -join "`n"
+            Start-Sleep 2
+          }
+          if ($ps -notmatch 'running') { throw "engine did not come back: [$ps]" }
+          docker -H npipe:////./pipe/dockup_engine version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'bridge dead after self-heal' }
+          exit 0
+      - name: uninstall only removes dockup
+        run: |
+          .\dockup.exe daemon stop
+          echo y | .\dockup.exe uninstall
+          $list = ((wsl --list --quiet) -join "`n") -replace "`0", ""
+          if ($list -match '(?m)^dockup$') { throw "dockup still present: [$list]" }
+          foreach ($d in @('dockup-extra1', 'dockup-extra2')) {
+            if ($list -notmatch $d) { throw "$d wrongly removed: [$list]" }
+          }
+          exit 0
+      - name: cleanup neighbors
+        if: always()
+        run: |
+          wsl --terminate dockup-extra1 2>$null
+          wsl --terminate dockup-extra2 2>$null
+          wsl --unregister dockup-extra1 2>$null
+          wsl --unregister dockup-extra2 2>$null
+          Remove-Item -Recurse -Force C:\multi-extra1, C:\multi-extra2 -ErrorAction Continue
+          exit 0

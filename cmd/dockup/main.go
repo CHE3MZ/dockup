@@ -19,6 +19,7 @@ import (
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/setup"
 	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/sysinfo"
 	"github.com/CHE3MZ/dockup/internal/ui"
 	"github.com/CHE3MZ/dockup/internal/userconfig"
 	"github.com/CHE3MZ/dockup/internal/wsl"
@@ -255,12 +256,14 @@ func psHelp() {
 	fmt.Print(ui.Header("dockup ps") + `
   Show dockup's status:
 
-    STATUS      AUTOSTART
-    running     off
+    STATUS      AUTOSTART   INSTALLED   SIZE      MEMORY
+    running     off         yes         452 MB    128 MB
 
   STATUS is ` + ui.Green("running") + ` (engine answering), ` + ui.White("starting...") + `
   (bridge up, engine still booting) or ` + ui.White("stopped") + `.
-  AUTOSTART is ` + ui.Cyan("on") + ` or ` + ui.Cyan("off") + `, taken from ~/.dockup/config.json.
+  AUTOSTART is ` + ui.Cyan("on") + ` or ` + ui.Cyan("off") + `, INSTALLED is ` + ui.Cyan("yes") + ` or ` + ui.Cyan("no") + `,
+  SIZE is the distro's disk use, MEMORY its live RAM use (both from
+  ~/.dockup/config.json state and live probes).
 
 ` + ui.LightBlue("Usage:") + `
   dockup ps
@@ -430,7 +433,24 @@ func cmdPs(cfg userconfig.Config) int {
 	pipe := cfg.EffectivePipe()
 	alive := relay.AliveOn(pipe)
 	status := pstable.Classify(alive, s.Installed, alive && relay.EngineReady(pipe))
-	fmt.Println(pstable.Render(status, cfg.Autostart))
+	row := pstable.Row{
+		Status:    status,
+		Autostart: pstable.AutostartText(cfg.Autostart),
+		Installed: pstable.InstalledText(cfg.Installed),
+		Size:      "-",
+		Memory:    "-",
+	}
+	if cfg.Installed {
+		if n, err := sysinfo.DirSize(userconfig.InstallDir()); err == nil {
+			row.Size = sysinfo.FormatSize(n)
+		}
+		if alive {
+			if total := sysinfo.DockupWindowsRSS() + dockupDistroRSS(); total > 0 {
+				row.Memory = sysinfo.FormatSize(total)
+			}
+		}
+	}
+	fmt.Println(pstable.RenderRow(row))
 	if alive && !s.Installed {
 		fmt.Printf("%s\n", ui.Gray("(pipe held by another program, not dockup)"))
 	}
@@ -442,6 +462,15 @@ func cmdPs(cfg userconfig.Config) int {
 		}
 	}
 	return 0
+}
+
+// dockupDistroRSS returns in-distro memory, zero when unreachable.
+func dockupDistroRSS() uint64 {
+	n, err := sysinfo.DistroRSS(config.DistroName)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 func cmdDaemon(cfg userconfig.Config, args []string) int {

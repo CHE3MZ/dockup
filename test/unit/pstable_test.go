@@ -37,26 +37,50 @@ func TestAutostartText(t *testing.T) {
 func TestRenderTable(t *testing.T) {
 	ui.SetEnabled(true)
 	defer ui.SetEnabled(false)
-	out := pstable.Render(pstable.StatusStarting, true)
-	if !strings.Contains(out, "STATUS") || !strings.Contains(out, "AUTOSTART") {
-		t.Fatalf("missing bold headers: %q", out)
+	out := pstable.RenderRow(pstable.Row{
+		Status:    pstable.StatusStarting,
+		Autostart: pstable.AutostartText(true),
+		Installed: pstable.InstalledText(true),
+		Size:      "452 MB",
+		Memory:    "128 MB",
+	})
+	for _, want := range []string{"STATUS", "AUTOSTART", "INSTALLED", "SIZE", "MEMORY"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing bold header %s: %q", want, out)
+		}
 	}
 	if !strings.Contains(out, "\x1b[1m") {
 		t.Fatalf("headers not bold: %q", out)
 	}
-	if !strings.Contains(out, "starting...") || !strings.Contains(out, "on") {
-		t.Fatalf("missing values: %q", out)
+	for _, want := range []string{"starting...", "on", "yes", "452 MB", "128 MB"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing value %s: %q", want, out)
+		}
 	}
-	// Values must be plain (non-bold): only two bold sequences (headers).
-	if n := strings.Count(out, "\x1b[1m"); n != 2 {
-		t.Fatalf("expected 2 bold headers, got %d: %q", n, out)
+	// Values must be plain (non-bold): one bold sequence per header.
+	if n := strings.Count(out, "\x1b[1m"); n != 5 {
+		t.Fatalf("expected 5 bold headers, got %d: %q", n, out)
 	}
 }
 
 func TestRenderStoppedOff(t *testing.T) {
 	ui.SetEnabled(false)
-	out := pstable.Render(pstable.StatusStopped, false)
-	if !strings.Contains(out, "STATUS") || !strings.Contains(out, "stopped") || !strings.Contains(out, "off") {
-		t.Fatalf("got %q", out)
+	out := pstable.RenderRow(pstable.Row{
+		Status:    pstable.StatusStopped,
+		Autostart: pstable.AutostartText(false),
+		Installed: pstable.InstalledText(false),
+		Size:      "-",
+		Memory:    "-",
+	})
+	for _, want := range []string{"STATUS", "stopped", "off", "no"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %s: %q", want, out)
+		}
+	}
+}
+
+func TestInstalledText(t *testing.T) {
+	if pstable.InstalledText(true) != "yes" || pstable.InstalledText(false) != "no" {
+		t.Fatal("bad installed text")
 	}
 }

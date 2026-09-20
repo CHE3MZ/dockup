@@ -209,6 +209,19 @@ func (c Config) EffectivePort() int {
 	return DefaultPort
 }
 
+// InstallDir returns where the distro lives: stored current_path,
+// falling back to the legacy default for pre-config installs.
+func InstallDir() string {
+	c, _ := Load()
+	c = c.WithDefaults()
+	if strings.TrimSpace(c.CurrentPath) != "" {
+		if p, err := NormalizePath(c.CurrentPath); err == nil {
+			return filepath.FromSlash(p)
+		}
+	}
+	return config.WslInstallDir()
+}
+
 // TCPAddr is the 127.0.0.1-only listen address for the optional TCP bridge.
 func (c Config) TCPAddr() string {
 	return fmt.Sprintf("127.0.0.1:%d", c.EffectivePort())

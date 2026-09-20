@@ -1,8 +1,8 @@
-// Package pstable renders `dockup ps` as a two-column table with bold
-// headers and plain values:
+// Package pstable renders `dockup ps` as a table with bold headers and
+// plain values:
 //
-//	STATUS      AUTOSTART
-//	running     off
+//	STATUS      AUTOSTART   INSTALLED   SIZE      MEMORY
+//	running     off         yes         452 MB    128 MB
 package pstable
 
 import (
@@ -43,18 +43,40 @@ func AutostartText(on bool) string {
 	return "off"
 }
 
-// Render builds the table. Headers are bold, values are plain.
-func Render(status string, autostartOn bool) string {
-	h1, h2 := "STATUS", "AUTOSTART"
-	v2 := AutostartText(autostartOn)
-	w1 := max(len(h1), len(status)) + 4
-	w2 := max(len(h2), len(v2)) + 2
+// InstalledText renders whether the distro is installed.
+func InstalledText(installed bool) string {
+	if installed {
+		return "yes"
+	}
+	return "no"
+}
+
+// Row is one ps table body line. Size and Memory carry their own unit
+// ("452 MB", "1.2 GB") or "-" when unknown; see sysinfo.FormatSize.
+type Row struct {
+	Status    string
+	Autostart string
+	Installed string
+	Size      string
+	Memory    string
+}
+
+// RenderRow builds the table. Headers are bold, values are plain.
+func RenderRow(r Row) string {
+	headers := []string{"STATUS", "AUTOSTART", "INSTALLED", "SIZE", "MEMORY"}
+	values := []string{r.Status, r.Autostart, r.Installed, r.Size, r.Memory}
+	widths := make([]int, len(headers))
+	for i := range headers {
+		widths[i] = max(len(headers[i]), len(values[i])) + 4
+	}
 	var b strings.Builder
-	b.WriteString(ui.Bold(fmt.Sprintf("%-*s", w1, h1)))
-	b.WriteString(ui.Bold(fmt.Sprintf("%-*s", w2, h2)))
+	for i, h := range headers {
+		b.WriteString(ui.Bold(fmt.Sprintf("%-*s", widths[i], h)))
+	}
 	b.WriteString("\n")
-	_, _ = fmt.Fprintf(&b, "%-*s", w1, status)
-	_, _ = fmt.Fprintf(&b, "%-*s", w2, v2)
+	for i, v := range values {
+		_, _ = fmt.Fprintf(&b, "%-*s", widths[i], v)
+	}
 	return b.String()
 }
 
