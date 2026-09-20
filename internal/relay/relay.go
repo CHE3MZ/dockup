@@ -207,21 +207,6 @@ type sideResult struct {
 	n    int64
 }
 
-// daemonBytes drains observed daemon->client byte counts from done.
-// Returns -1 when the daemon side never reported (unknown, not zero).
-func daemonBytes(done <-chan sideResult) int64 {
-	n := int64(-1)
-	for {
-		select {
-		case r := <-done:
-			if r.side == "stdout" {
-				n = r.n
-			}
-		default:
-			return n
-		}
-	}
-}
 func bridgeConn(client net.Conn, distro string) {
 	defer func() { _ = client.Close() }()
 	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--", // #nosec G204 -- fixed binary and argv; distro is our constant, never a shell
@@ -261,25 +246,45 @@ func bridgeConn(client net.Conn, distro string) {
 		n, _ := io.Copy(client, fromProc)
 		done <- sideResult{side: "stdout", n: n}
 	}()
+	// outN tracks daemon->client bytes once observed; -1 = unknown.
+	var outN int64 = -1
+	note := func(r sideResult) {
+		if r.side == "stdout" {
+			outN = r.n
+		}
+	}
 	if first := <-done; first.side == "stdin" {
+		// Client half-closed stdin: let the container flush and exit.
 		timer := time.NewTimer(60 * time.Second)
 		select {
-		case <-done:
+		case r := <-done:
+			note(r)
+		case <-timer.C:
+		}
+		timer.Stop()
+	} else {
+		note(first)
+	}
+	_ = cmd.Process.Kill()
+	werr := cmd.Wait()
+	if outN < 0 {
+		// A copy parked on the live client can hide a dead backend;
+		// insist briefly on the daemon-side verdict instead of closing
+		// blind (a blind close is what produced silent empty responses).
+		timer := time.NewTimer(10 * time.Second)
+		select {
+		case r := <-done:
+			note(r)
 		case <-timer.C:
 		}
 		timer.Stop()
 	}
-	_ = cmd.Process.Kill()
-	timer := time.NewTimer(5 * time.Second)
-	select {
-	case <-done:
-	case <-timer.C:
-	}
-	timer.Stop()
-	werr := cmd.Wait()
-	if werr != nil && daemonBytes(done) == 0 {
+	switch {
+	case werr != nil && outN == 0:
 		logx.Append(fmt.Sprintf("bridge: backend for %s died before output (%v)", distro, werr))
 		_, _ = fmt.Fprint(client, gatewayError)
+	case werr != nil && outN < 0:
+		logx.Append(fmt.Sprintf("bridge: backend for %s failed, client state unknown (%v)", distro, werr))
 	}
 	dbg("bridge done (wait=%v)", werr)
 }
