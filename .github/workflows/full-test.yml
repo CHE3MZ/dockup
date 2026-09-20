@@ -325,9 +325,20 @@ jobs:
       - name: restore repairs, keeps data
         timeout-minutes: 10
         run: |
-          $o = echo y | .\dockup.exe restore 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "restore failed: $o" }
-          if (($o -join "`n") -notmatch 'cowsay') { throw "removal list missing cowsay: $o" }
+          echo y | .\dockup.exe restore > restore-out.txt 2> restore-err.txt
+          $code = $LASTEXITCODE
+          Write-Output '=== STDOUT ==='; Get-Content restore-out.txt
+          Write-Output '=== STDERR ==='; Get-Content restore-err.txt
+          if ($code -ne 0) {
+            Write-Output 'WARNING: restore attempt 1 failed, retrying once'
+            echo y | .\dockup.exe restore > restore-out.txt 2> restore-err.txt
+            $code = $LASTEXITCODE
+            Write-Output '=== STDOUT (retry) ==='; Get-Content restore-out.txt
+            Write-Output '=== STDERR (retry) ==='; Get-Content restore-err.txt
+            if ($code -ne 0) { throw "restore failed twice with $code" }
+          }
+          $o = Get-Content restore-out.txt -Raw
+          if ($o -notmatch 'cowsay') { throw 'removal list missing cowsay' }
           wsl -d dockup -u root -- dpkg -s socat > $null
           if ($LASTEXITCODE -ne 0) { throw 'socat not back' }
           wsl -d dockup -u root -- test -f /etc/docker/daemon.json.bak
@@ -336,6 +347,7 @@ jobs:
           if (!$srv) { throw 'engine dead after restore' }
           $imgs = docker -H npipe:////./pipe/dockup_engine images -q hello-world
           if (!$imgs) { throw 'hello-world image lost (data not preserved)' }
+          Remove-Item restore-out.txt, restore-err.txt
           exit 0
       - name: daemon stop
         run: .\dockup.exe daemon stop

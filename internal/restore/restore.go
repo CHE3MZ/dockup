@@ -108,6 +108,7 @@ func runLight() int {
 		return 0
 	}
 	if len(removal) > 0 {
+		logx.Info("removing %d added package(s)...", len(removal))
 		script := "set -eu\nexport DEBIAN_FRONTEND=noninteractive\napt-get remove -y " + strings.Join(removal, " ") + "\napt-get autoremove -y\n"
 		if _, err := wsl.RunRetry(distro, "remove added packages", 5*time.Minute, 2, script); err != nil {
 			logx.Err("%v", err)
@@ -122,6 +123,7 @@ func runLight() int {
 			return 1
 		}
 	}
+	logx.Info("repairing config and services...")
 	note, err := docker.Repair(distro)
 	if err != nil {
 		logx.Err("%v", err)
