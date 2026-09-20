@@ -213,7 +213,7 @@ func RunEx(o Options) int {
 
 	// 6. Test docker.
 	logx.Info("testing docker... (0%%)")
-	if err := docker.TestDaemon(config.DistroName); err != nil {
+	if err := docker.WaitDaemon(config.DistroName, 90*time.Second); err != nil {
 		logx.Info("test results : failure")
 		logx.Err("%v", err)
 		if askRetryAbort() {

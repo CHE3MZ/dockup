@@ -216,7 +216,7 @@ func fixDistro() error {
 	}
 	_ = wsl.Terminate(distro)
 	time.Sleep(3 * time.Second)
-	if err := docker.TestDaemon(distro); err != nil {
+	if err := docker.WaitDaemon(distro, 90*time.Second); err != nil {
 		return fmt.Errorf("fix: engine still unhealthy after repair: %w", err)
 	}
 	logx.Ok("fix: engine restored and answering")

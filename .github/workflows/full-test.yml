@@ -325,20 +325,21 @@ jobs:
       - name: restore repairs, keeps data
         timeout-minutes: 10
         run: |
-          echo y | .\dockup.exe restore > restore-out.txt 2> restore-err.txt
+          echo y | .\dockup.exe restore > restore-out1.txt 2> restore-err1.txt
           $code = $LASTEXITCODE
-          Write-Output '=== STDOUT ==='; Get-Content restore-out.txt
-          Write-Output '=== STDERR ==='; Get-Content restore-err.txt
+          Write-Output '=== STDOUT (attempt 1) ==='; Get-Content restore-out1.txt
+          Write-Output '=== STDERR (attempt 1) ==='; Get-Content restore-err1.txt
+          $o1 = Get-Content restore-out1.txt -Raw
           if ($code -ne 0) {
             Write-Output 'WARNING: restore attempt 1 failed, retrying once'
-            echo y | .\dockup.exe restore > restore-out.txt 2> restore-err.txt
+            echo y | .\dockup.exe restore > restore-out2.txt 2> restore-err2.txt
             $code = $LASTEXITCODE
-            Write-Output '=== STDOUT (retry) ==='; Get-Content restore-out.txt
-            Write-Output '=== STDERR (retry) ==='; Get-Content restore-err.txt
+            Write-Output '=== STDOUT (retry) ==='; Get-Content restore-out2.txt
+            Write-Output '=== STDERR (retry) ==='; Get-Content restore-err2.txt
             if ($code -ne 0) { throw "restore failed twice with $code" }
+            Remove-Item restore-out2.txt, restore-err2.txt
           }
-          $o = Get-Content restore-out.txt -Raw
-          if ($o -notmatch 'cowsay') { throw 'removal list missing cowsay' }
+          if ($o1 -notmatch 'cowsay') { throw 'attempt 1 never listed cowsay for removal' }
           wsl -d dockup -u root -- dpkg -s socat > $null
           if ($LASTEXITCODE -ne 0) { throw 'socat not back' }
           wsl -d dockup -u root -- test -f /etc/docker/daemon.json.bak
@@ -347,7 +348,7 @@ jobs:
           if (!$srv) { throw 'engine dead after restore' }
           $imgs = docker -H npipe:////./pipe/dockup_engine images -q hello-world
           if (!$imgs) { throw 'hello-world image lost (data not preserved)' }
-          Remove-Item restore-out.txt, restore-err.txt
+          Remove-Item restore-out1.txt, restore-err1.txt
           exit 0
       - name: daemon stop
         run: .\dockup.exe daemon stop

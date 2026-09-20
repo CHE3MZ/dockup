@@ -92,13 +92,28 @@ func TestDaemon(distro string) error {
 	return nil
 }
 
+// WaitDaemon polls TestDaemon until the daemon answers or the timeout
+// elapses. Mandatory after any restart: dockerd needs seconds to boot,
+// and a single-shot check right after `systemctl restart` flakes.
+func WaitDaemon(distro string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var err error
+	for time.Now().Before(deadline) {
+		if err = TestDaemon(distro); err == nil {
+			return nil
+		}
+		time.Sleep(3 * time.Second)
+	}
+	return err
+}
+
 // Upgrade moves engine packages to their latest versions and verifies the
 // daemon answers afterwards.
 func Upgrade(distro string) error {
 	if _, err := wsl.RunRetry(distro, "upgrade docker", 10*time.Minute, 2, UpgradeScript); err != nil {
 		return err
 	}
-	return TestDaemon(distro)
+	return WaitDaemon(distro, 90*time.Second)
 }
 
 // EnginePackages is the dockup-managed set: always reinstalled by repair,
@@ -156,11 +171,11 @@ cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
 rm /etc/docker/daemon.json
 systemctl restart docker.service || true`
 		_, _ = wsl.ExecScript(distro, 2*time.Minute, rescue)
-		if err := TestDaemon(distro); err == nil {
+		if err := WaitDaemon(distro, 90*time.Second); err == nil {
 			return "reset /etc/docker/daemon.json (yours is kept at daemon.json.bak)", nil
 		}
 	}
-	if err := TestDaemon(distro); err != nil {
+	if err := WaitDaemon(distro, 90*time.Second); err != nil {
 		return "", fmt.Errorf("engine still unhealthy after repair: %w (try dockup restore --full)", err)
 	}
 	return "", nil
