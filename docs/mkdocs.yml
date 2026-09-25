@@ -1,1 +1,15 @@
-site_name: My Docs
+site_name: Dockup
+site_description: Documentation for the Dockup CLI.
+site_author: CHE3MZ
+repo_url: "https://github.com/CHE3MZ/dockup"
+# site_url: https://che3mz.github.io/dockup/
+
+nav:
+  - Home: index.md
+
+theme:
+  name: null
+  custom_dir: theme
+  highlightjs: true
+  disable_nav_previous_next: true
+  disable_footer: true
