@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose an addition or change
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today, or what hurts?
+      placeholder: When I ..., I have to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should dockup do instead? Which commands change?
+      placeholder: Add `dockup ...` that ...
+    validations:
+      required: true
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Fit check
+      description: dockup stays tiny and host-safe — please confirm the fit
+      options:
+        - label: Needs no new runtime dependencies and no host mutation beyond state/log/vhdx dirs
+        - label: Works with the existing named-pipe bridge (no new ports/firewall by default)
+        - label: I can describe how it is tested (unit and/or CI workflow asserts)

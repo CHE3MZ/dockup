@@ -1,0 +1,55 @@
+name: Bug report
+description: Something broken in dockup
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please paste exact commands and output —
+        and never hand-modify WSL distros to work around an issue without
+        saying so below.
+  - type: input
+    id: version
+    attributes:
+      label: dockup version
+      description: Output of `dockup version`
+      placeholder: e.g. abc1234 (or `dev` for local builds)
+    validations:
+      required: true
+  - type: dropdown
+    id: command
+    attributes:
+      label: Failing command
+      options:
+        - setup
+        - foreground (dockup)
+        - daemon start/stop/restart/status/log/autostart
+        - ps
+        - shutdown
+        - doctor
+        - upgrade
+        - restore
+        - uninstall
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Exact command plus exact output
+      placeholder: Command I ran, output I got, output I expected
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: '`dockup doctor` output'
+      description: Paste the full output
+      render: powershell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log tail
+      description: '`dockup daemon log` output, or %APPDATA%\dockup\logs\dockup.log tail'
+      render: powershell

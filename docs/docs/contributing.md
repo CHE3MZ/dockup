@@ -1,7 +1,9 @@
 # Contributing
 
 Issues and pull requests are welcome at
-[CHE3MZ/dockup](https://github.com/CHE3MZ/dockup).
+[CHE3MZ/dockup](https://github.com/CHE3MZ/dockup) — please use the
+bug/feature templates and the pull request checklist; they encode the
+rules below.
 
 ## Ground rules
 
