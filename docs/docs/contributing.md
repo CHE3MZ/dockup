@@ -5,25 +5,35 @@ Issues and pull requests are welcome at
 bug/feature templates and the pull request checklist; they encode the
 rules below.
 
-## Ground rules
 
-- **Never mutate the host in PRs.** No code path may require running dockup
-  commands, touching WSL, or downloading payloads on a dev machine — CI owns
-  all functional testing (see [Building & Testing](developers/building-testing.md)).
-- **Keep it tiny.** Stdlib-first, minimal dependencies (`go-winio` only at
-  runtime). One package per concept; `main.go` stays dispatch-only.
-- **Short commit messages** in the repo's existing style
-  (e.g. `move installed flag from config to state`).
-- **Pure logic gets unit tests** in `test/unit/` (no WSL, no network);
-  user-facing flows get CI workflow asserts.
-- **User-facing changes update these docs**, and must pass a local
-  `mkdocs build --strict` from `docs/` before pushing.
-- **Don't reword frozen strings** — CI greps the setup banner, `starting...`,
-  `test results :`, and the `ps` headers verbatim.
+- **Testing.** Testing must generally be done on the cloud via the github actions
+  workflows that have been created for this project, local tests are preferred over
+  cloud ones, but generally speaking most of the project's testing is done on the cloud,
+  make sure to test all of your changes and report any errors etc. , it is generally
+  recommended that you only push your changes once you have no runtime or pre-compliation
+  linting errors, in order to ensure that the code remains high quality and possible to 
+  maintain, please avoid opening pull requests for untested and or unreviewed changes,
+  doing so makes things harder for me and or anyone else who is in charge of maintaining
+  the project and reviewing/accepting PRs.
+- **Short commit messages** please make sure to keep your commit messages short and well
+  formatted, try to avoid using random commit messages like "updated something" or
+  "fixed something", just a simple overview of what your commit adds or removes is enough
+  I'm not asking for less nor more than that.
+- **Bug Checks** make sure to run bug checkers linters and other tools as you're changing
+  stuff to ensure that you don't write flawed code, you can use the scripts\ops\go-bugcheck.sh
+  and the scripts\ops\go-seccheck.sh to quickly check your changes in the logs folder, make
+  sure you have all the tools that the scripts demand installed before running them!
 
-## Workflow
-
-1. Fork, branch, implement (host: `go build` / `go vet` / lint scripts only).
-2. Commit short, push, then watch the workflows:
-   `gh run list` → `gh run view <ID> --log`, fix-forward.
-3. All workflows green before review.
+  *running these linters is a MUST if you are working on big changes.*
+  
+- **Tests:** make sure to run and add tests if possible or needed.
+- **Docs:** make sure to document your changes into docs/docs if possible.
+- **Comments:** make sure to add comments next to your changes if possible.
+- **Frozen strings** (CI greps them): setup banner flow,
+  `dockup has not been setup yet run "dockup setup" to set it up.`,
+  `starting...`, `test results :`, `autostart: on/off`,
+  `STATUS/AUTOSTART/INSTALLED/SIZE/MEMORY`, `read-only`, `ok: autostart on`,
+  `dry run complete` — never reword.
+- **Green before review:** make sure all the workflows are green before you
+  submit your PR. most of them will run automatically so just check on them
+  to see if everything is showing green, if not investigate why !
