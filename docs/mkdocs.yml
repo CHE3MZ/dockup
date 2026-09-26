@@ -7,6 +7,12 @@ repo_url: "https://github.com/CHE3MZ/dockup"
 nav:
   - Home: index.md
 
+extra_css:
+  - assets/dark-mode.css
+
+extra_javascript:
+  - assets/dark-mode.js
+
 theme:
   name: null
   custom_dir: theme
