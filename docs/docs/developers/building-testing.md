@@ -38,7 +38,7 @@ gh workflow run <name> [-f full-setup=true]
 `git add -A` sweeps parallel uncommitted edits into your commit — always run
 `git status` / `git diff` first and report what rode along.
 
-## CI map (all on push + dispatch)
+## CI map (all on push + dispatch; `ci` also on pull requests)
 
 | Workflow | Proves |
 |---|---|
@@ -49,7 +49,6 @@ gh workflow run <name> [-f full-setup=true]
 | `inspect-wsl` | Distro audit, provenance manifest, upgrade, break → `doctor --fix`, `--full`, reinstall reproducibility |
 | `multi-distro` | Neighbor distros untouched; shutdown → `starting...` → self-heal; scoped uninstall |
 | `arm-test` | arm64 vet/unit/build always; `--arm` install gated on a WSL probe (arm images currently lack WSL) |
-| `docs` | `mkdocs build --strict` for this site |
 
 ## PowerShell-in-CI pitfalls (learned the hard way)
 

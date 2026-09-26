@@ -1,6 +1,6 @@
-# Dockup
-
 <img src="assets/icon.png" alt="Dockup Logo" width="240" />
+
+# Dockup
 
 Docker Engine in a dedicated WSL distro, driven from Windows. No Docker
 Desktop, no services, no autostart unless you ask for it: one static

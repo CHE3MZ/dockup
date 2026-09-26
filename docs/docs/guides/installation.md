@@ -22,9 +22,9 @@ go build -o dockup.exe ./cmd/dockup
 dockup setup
 ```
 
-Setup asks two things: **where** to install the distro (any absolute path,
+By default, setup asks two things: **where** to install the distro (any absolute path,
 e.g. `D:/WSL` — empty input keeps the shown default, which is whatever you
-used last), and confirms before touching anything:
+used last; `--path` skips this), and confirms before touching anything:
 
 ```text
 Setting up dockup :
@@ -48,7 +48,7 @@ you're all good to go ! run "dockup" to start a foreground process or "dockup da
 | Flag | Effect |
 |---|---|
 | `--amd` / `--arm` | Distro architecture (default `--amd`) |
-| `--path=DIR` | Install here without asking (becomes the new default) |
+| `--path=DIR` | Install here without asking (becomes the new default on success) |
 | `--dry-run` | Print distro name, install dir, URLs + sizes, pipe/TCP plan — changes nothing |
 
 ### Reinstalling

@@ -27,7 +27,7 @@ Supporting tree:
 ```text
 test/unit/        # pure tests: no WSL, no network
 test/e2e/doc.go   # placeholder — real e2e runs in GitHub Actions
-scripts/build.ps1 # windows build · test.ps1 · smoke.ps1 (version/doctor/ps only)
+scripts/build.ps1 # windows build · test.ps1 · smoke.ps1 (version/doctor/ps/status, no mutations)
 scripts/ops/      # go-bugcheck.sh (7 lint gates) · go-seccheck.sh (gosec)
 cmd/dockup/winres/winres.json + rsrc_windows_*.syso  # exe icon (assets/appicon.png)
 assets/           # icon variants (exe uses appicon.png)

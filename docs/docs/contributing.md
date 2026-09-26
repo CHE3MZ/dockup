@@ -14,8 +14,8 @@ Issues and pull requests are welcome at
   (e.g. `move installed flag from config to state`).
 - **Pure logic gets unit tests** in `test/unit/` (no WSL, no network);
   user-facing flows get CI workflow asserts.
-- **User-facing changes update these docs**, and must pass
-  `mkdocs build --strict` (the `docs` workflow enforces it).
+- **User-facing changes update these docs**, and must pass a local
+  `mkdocs build --strict` from `docs/` before pushing.
 - **Don't reword frozen strings** — CI greps the setup banner, `starting...`,
   `test results :`, and the `ps` headers verbatim.
 
@@ -24,4 +24,4 @@ Issues and pull requests are welcome at
 1. Fork, branch, implement (host: `go build` / `go vet` / lint scripts only).
 2. Commit short, push, then watch the workflows:
    `gh run list` → `gh run view <ID> --log`, fix-forward.
-3. All workflows green (or scoped-green for docs-only changes) before review.
+3. All workflows green before review.
