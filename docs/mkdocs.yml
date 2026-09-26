@@ -1,21 +1,50 @@
 site_name: Dockup
-site_description: Documentation for the Dockup CLI.
+site_description: Docker Engine in a dedicated WSL distro, driven from Windows. No Docker Desktop.
 site_author: CHE3MZ
-repo_url: "https://github.com/CHE3MZ/dockup"
-# site_url: https://che3mz.github.io/dockup/
+repo_url: https://github.com/CHE3MZ/dockup
+
+theme:
+  name: material
+  logo: assets/icon.png
+  favicon: assets/icon.png
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - footnotes
 
 nav:
   - Home: index.md
-
-extra_css:
-  - assets/dark-mode.css
-
-extra_javascript:
-  - assets/dark-mode.js
-
-theme:
-  name: null
-  custom_dir: theme
-  highlightjs: true
-  disable_nav_previous_next: true
-  disable_footer: true
+  - Guides:
+    - Installation: guides/installation.md
+    - Getting Started: guides/getting-started.md
+    - Using Docker: guides/using-docker.md
+    - Configuration: guides/configuration.md
+    - Maintenance: guides/maintenance.md
+    - Troubleshooting: guides/troubleshooting.md
+  - Developers:
+    - Architecture: developers/architecture.md
+    - Project Layout: developers/project-layout.md
+    - Building & Testing: developers/building-testing.md
+  - Contributing: contributing.md

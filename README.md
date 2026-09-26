@@ -77,8 +77,8 @@ nothing runs unless you start it.
 Host machine is compile/lint only: `go build ./...`, `go vet ./...`,
 `scripts/ops/go-bugcheck.sh` (run it with Git bash). Everything
 functional runs on GitHub Actions via `gh`: `ci`, `e2e-wsl`,
-`full-test`, `scoop-test`, `inspect-wsl`. See `plan.md` and
-`revision.md` for the architecture and build order.
+`full-test`, `scoop-test`, `inspect-wsl`, `multi-distro`, `arm-test`,
+`docs`. See `plan.md` and `revision.md` for the architecture and build order.
 
 The exe icon is `assets/appicon.png`, embedded via the checked-in
 `cmd/dockup/rsrc_windows_*.syso` (picked up automatically by `go build`;

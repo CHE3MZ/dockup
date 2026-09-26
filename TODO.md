@@ -10,6 +10,6 @@
 
 - [*SCRAPPED*] **add a browser web UI using Vue 3 + Vite + Vue Vapor feature , bun for build test , net/http + embed for bridge , served to host at localhost:8060 ( experimental - should not be implemented yet until everything works. )**
 
-- [✗] **writing a proper, simplistic readme.md , and writing full documentation into docs/docs**
+- [*WIP*] **writing a proper, simplistic readme.md , and writing full documentation into docs/docs**
 
 - [✗] **creating a CD job for auto tag creator and releaser to build and release windows binaries and create a new tag and assign the binary (zipped as tar.gz ) to the tag.**
