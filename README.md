@@ -1,85 +1,34 @@
-<img src="assets/icon.png" alt="Dockup Logo" width="320" />
+<img src="assets/icon.png" alt="Dockup Logo" width="240" />
 
 # Dockup
 
-Docker Engine in a dedicated WSL distro, driven from Windows. No Docker
-Desktop, no services, no autostart unless you ask for it: one static
-`dockup.exe` installs Debian into WSL as `dockup`, runs dockerd there under
-systemd, and bridges the Windows Docker CLI to it over a named pipe
-(plus an optional 127.0.0.1 TCP bridge).
+Docker without Docker Desktop. One small exe sets up its own Debian distro
+inside WSL, runs the Docker engine there, and lets your Windows Docker CLI
+talk to it. Nothing runs in the background unless you say so.
 
-## Requirements
+**Full documentation lives here: <https://che3mz.github.io/dockup/>**
 
-- Windows 10/11 with WSL2 (`wsl --install`)
-- A Windows Docker CLI, e.g. `scoop install docker docker-compose`
-- `dockup.exe` on your PATH (Windows amd64 only)
+## Try it
 
-## Quickstart
+You need Windows 10/11 with WSL2, a Windows Docker CLI
+(`scoop install docker`), and `dockup.exe` on your PATH.
 
 ```powershell
-dockup setup                  # install the dockup distro (asks where + which arch)
-dockup daemon start           # run in the background
+dockup setup                  # one-time install, asks where to put things
+dockup daemon start           # run quietly in the background
 docker -H npipe:////./pipe/dockup_engine run --rm hello-world
-dockup daemon stop            # stop when done
+dockup daemon stop            # stop when you're done
 ```
 
-Or run in the foreground with `dockup` (Ctrl+C stops it).
+Prefer the foreground? Just run `dockup` and Ctrl+C to stop.
 
-## Commands
+## Everyday commands
 
-| Command | What it does |
-|---|---|
-| `dockup` | Foreground run, logs inline, Ctrl+C stops |
-| `dockup setup [--amd\|--arm] [--path=DIR] [--dry-run]` | Install the distro, Docker, systemd config; verify |
-| `dockup uninstall` | Remove the distro and its state (keeps your default path) |
-| `dockup ps` | `STATUS` (`running`/`starting...`/`stopped`) + `AUTOSTART` table |
-| `dockup daemon start\|stop\|restart\|status\|log` | Background process management + log follow |
-| `dockup daemon autostart [on\|off]` | Show or set starting at Windows login (default off) |
-| `dockup shutdown` | Stop everything and terminate the distro |
-| `dockup doctor [--fix]` | Health checks; `--fix` reinstalls/repairs a broken engine |
-| `dockup upgrade` | Update the in-distro engine to the latest versions |
-| `dockup version` | Show the version |
-| `dockup help [command]` | Help (`-h`/`--help` work on every command) |
+- `dockup ps` — is it running?
+- `dockup daemon autostart on` — start with Windows (off by default)
+- `dockup doctor` — something off? start here (`--fix` rebuilds the engine)
+- `dockup restore` — undo tampering, keeps your images
+- `dockup shutdown` / `dockup uninstall` — stop everything / remove it all
 
-## Configuration
-
-First run creates `~/.dockup/config.json`:
-
-```json
-{
-  "default_path": "C:/WSL",
-  "current_path": "C:/WSL",
-  "port": 2375,
-  "use_tcp": false,
-  "pipe_name": "\\\\.\\pipe\\dockup_engine",
-  "color": true,
-  "autostart": false
-}
-```
-
-`default_path` is prefilled at the next setup (whatever you used last
-becomes the default); `current_path` is where the live distro sits.
-Point any Docker client at the bridge with
-`docker -H npipe:////./pipe/dockup_engine ...` or
-`$env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'`
-(`tcp://127.0.0.1:2375` when `use_tcp` is on).
-
-## How it works
-
-Windows `docker.exe` → named pipe `\\.\pipe\dockup_engine` (raw byte
-copy, so `run -it`, `logs -f`, `exec`, and Compose all behave natively)
-→ per-connection `wsl -d dockup socat STDIO UNIX-CONNECT:/var/run/docker.sock`
-→ `dockerd` under systemd. No TCP ports or firewall rules by default,
-nothing runs unless you start it.
-
-## Development
-
-Host machine is compile/lint only: `go build ./...`, `go vet ./...`,
-`scripts/ops/go-bugcheck.sh` (run it with Git bash). Everything
-functional runs on GitHub Actions via `gh`: `ci`, `e2e-wsl`,
-`full-test`, `scoop-test`, `inspect-wsl`, `multi-distro`, `arm-test`,
-`docs`. See `plan.md` and `revision.md` for the architecture and build order.
-
-The exe icon is `assets/appicon.png`, embedded via the checked-in
-`cmd/dockup/rsrc_windows_*.syso` (picked up automatically by `go build`;
-regenerate with `go-winres make --arch amd64,arm64` inside `cmd/dockup`).
+That's the gist — guides, configuration reference, and contributor notes
+are all on [the website](https://che3mz.github.io/dockup/).
