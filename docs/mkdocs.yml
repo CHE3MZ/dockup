@@ -44,7 +44,9 @@ markdown_extensions:
   - footnotes
 
 nav:
-  - Home: index.md
+  - Home: 
+    - Introduction: index.md
+    - See Also...: see-also.md
   - Guides:
     - Installation: guides/installation.md
     - Getting Started: guides/getting-started.md
