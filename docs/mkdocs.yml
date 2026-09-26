@@ -1,12 +1,21 @@
 site_name: Dockup
 site_description: Docker Engine in a dedicated WSL distro, driven from Windows. No Docker Desktop.
 site_author: CHE3MZ
+site_url: https://che3mz.github.io/dockup/
 repo_url: https://github.com/CHE3MZ/dockup
 
 theme:
-  name: material
-  logo: assets/icon.png
-  favicon: assets/icon.png
+  name: mkdocs
+  custom_dir: theme
+  language: en
+  logo: assets/icon-white.png
+  favicon: assets/icon-white.png
+  icon: {}
+  font:
+    text: Roboto
+    code: Roboto Mono
+  static_templates:
+    - 404.html
   palette:
     - scheme: default
       primary: indigo
