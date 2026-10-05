@@ -1,15 +1,50 @@
-*( this TODO list should be picked up later not now , we should focus on testing and improving the codebase as is right now first, before going through this TODO list, the items here are not very significant so they shall come last in development) use **✔ for done** , **✗ for not done** , **WIP for work-in-progress** (currently doing).*
+- [ ] address these problems:
 
----
+where do you want to install the dockup distro?
+enter path e.g D:/WSL [default: C:/Users/USERNAME/AppData/Local/dockup/wsl]: D:/WSL/Dockup
+installing debian... (0/46 mb)
+installing debian... (46/46 mb)
+importing debian into WSL as "dockup"... (0%)
+downloaded rootfs-amd64-bookworm.tar.gz (46 MB) -> C:\Users\USERNAME\AppData\Local\Temp\dockup-rootfs-amd64.tar.gz
+importing debian into WSL as "dockup"... (100%)
+testing dockup on WSL... (please wait.)
+test results : success
+installing docker... (0%)
+installing docker... (100%)
+configuring docker...  (0%)
+configuring docker...  (100%)
+testing docker... (0%)
+test results : success
+testing the docker daemon bridge... (0%)
+test results : success
+you're all good to go ! run "dockup" to start a foreground process or "dockup daemon start" to start a background daemon process.
 
-- [✔] **add a restore command to restore the distro to its default state. this should help fix any potentially unwanted modifications having been made to distro get rest, command name should be "dockup restore" and it should have a lightweight solution to restoring stuff, it should not be heavy. --this feature is important and should be considered at some point when the rest of the stuff is done.**
+issue: enter path e.g is bad because it uses D:/WSL instead of D:/WSL/Dockup
+issue: two installing debian... texts one has 0/46 the other moves the first one is static
+issue: importing debian into wsl as dockup is stuck 0% in display
+installing docker... is stuck at 0% the actual progress doesnt show, there is a duplicate test that shows it, configuring docker has the same issue
+issue: everything with a progress basically either doesnt work, has a duplicate or both
 
-- [✔] **move the "installed" variable from .dockup/config.json to .dockup/state.json**
+other issues:
 
-- [✔] **small change : using the assets/icon-black.png or assets/appicon.png as the exe build icon.**
+PS C:\Users\USERNAME> dockup
+Starting dockup...
+dockup is up on \\.\pipe\dockup_engine
+use: docker -H npipe:////./pipe/dockup_engine version
+Running in the foreground — press Ctrl+C to stop.
 
-- [*SCRAPPED*] **add a browser web UI using Vue 3 + Vite + Vue Vapor feature , bun for build test , net/http + embed for bridge , served to host at localhost:8060 ( experimental - should not be implemented yet until everything works. )**
+PS C:\Users\USERNAME> docker ps
+failed to connect to the docker API at npipe:////./pipe/docker_engine; check if the path is correct and if the daemon is running: open //./pipe/docker_engine: The system cannot find the file specified.
 
-- [✔] **writing a proper, simplistic readme.md , and writing full documentation into docs/docs**
+PS C:\Users\USERNAME> dockup ps
+STATUS     AUTOSTART    INSTALLED    SIZE      MEMORY
+running    off          yes          1.0 GB    144 MB
 
-- [✗] **creating a CD job for auto tag creator and releaser to build and release windows binaries and create a new tag and assign the binary (zipped as tar.gz ) to the tag.**
+PS C:\Users\USERNAME> docker ps
+failed to connect to the docker API at npipe:////./pipe/docker_engine; check if the path is correct and if the daemon is running: open //./pipe/docker_engine: The system cannot find the file specified.
+
+issues: dockup doesnt work, docker says no daemon, everything is just messy and aint working.   
+
+issues: cannot CTRL + C foreground dockup it just doesnt work
+
+other issues: the CLI looks horrible the text looks bad and unprofessional uninteractive and overall just garbage.

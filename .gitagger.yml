@@ -1,0 +1,21 @@
+scale: patch
+pre: stable
+format: auto
+custom: ""
+remote: origin
+push: true
+force: false
+require_clean: false
+doctor: false
+verbose: false
+message: ""
+on:
+  failure:
+    - shell: sh
+      os: macos, linux
+      run:
+        - echo "Oops! Something went wrong..."
+    - shell: batch
+      os: windows
+      run:
+        - echo "Oops! Something went wrong..."
