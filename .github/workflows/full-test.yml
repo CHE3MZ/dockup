@@ -105,8 +105,9 @@ jobs:
         run: .\dockup.exe doctor --fix
       - name: record default pipe pre-state
         run: |
-          $pre = Test-Path '\\.\pipe\docker_engine'
-          if ($pre) { 'held' } else { 'free' } | Set-Content $env:TEMP\mirror-pre.txt
+          $state = 'free'
+          if (Test-Path '\\.\pipe\docker_engine') { $state = 'held' }
+          Set-Content -Path (Join-Path $env:TEMP 'mirror-pre.txt') -Value $state
           exit 0
       - name: daemon start
         run: .\dockup.exe daemon start
@@ -190,7 +191,7 @@ jobs:
           exit 0
       - name: bare docker via default-pipe mirror
         run: |
-          $pre = (Get-Content $env:TEMP\mirror-pre.txt -Raw).Trim()
+          $pre = (Get-Content (Join-Path $env:TEMP 'mirror-pre.txt') -Raw).Trim()
           $o = .\dockup.exe daemon restart 2>&1
           $j = ($o -join "`n")
           $vPipe = docker -H npipe:////./pipe/dockup_engine version --format '{{.Server.Version}}'
