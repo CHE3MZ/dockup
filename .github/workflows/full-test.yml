@@ -400,10 +400,14 @@ jobs:
             if ($LASTEXITCODE -ne 1) { throw "daemon start while foreground up should refuse, got $LASTEXITCODE" }
             .\dockup.exe shutdown
             if ($LASTEXITCODE -ne 0) { throw 'shutdown should stop the foreground too' }
-            try { Wait-Process -Id $p.Id -Timeout 30 }
-            catch { throw 'foreground survived shutdown' }
+            $gone = $false
+            for ($i = 0; $i -lt 30 -and !$gone; $i++) {
+              if (!(Get-Process -Id $p.Id -ErrorAction SilentlyContinue)) { $gone = $true; break }
+              Start-Sleep 1
+            }
+            if (!$gone) { throw 'foreground survived shutdown' }
           } finally {
-            Stop-Process -Id $p.Id -Force -ErrorAction Continue
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           }
           $down = $false
           for ($i = 0; $i -lt 15; $i++) {
