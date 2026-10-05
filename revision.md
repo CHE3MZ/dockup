@@ -34,15 +34,15 @@ Setting up dockup :
 
     >> y
 
-    installing debian... (0/DOWNLOADSIZE_INMB mb) ## DOWNLOADSIZE_INMB should be the filesize being downloaded
-    importing debian into WSL as "dockup"... (0%) ## show progress as %
+    installing debian... (0/DOWNLOADSIZE_INMB mb) ## DOWNLOADSIZE_INMB should be the filesize being downloaded, rewritten on one console line as it moves
+    importing debian into WSL as "dockup"... ## live elapsed timer while it works, "done" after (wsl --import reports no percentages, so no fake % is shown)
     testing dockup on WSL... (please wait.)
     test results : success/failure ## if failure ask user "something went wrong , retry or abort ? [retry/abort]"
-    installing docker... (0%) ## show progress as %
-    configuring docker...  (0%) ## show progress as %
-    testing docker... (0%) ## show progress as %
+    installing docker... ## live elapsed timer while it works, "done" after
+    configuring docker... ## live elapsed timer while it works, "done" after
+    testing docker... ## live elapsed timer while it works, "done" after
     test results : success/failure ## if failure ask user "something went wrong , retry or abort ? [retry/abort]"
-    testing the docker daemon bridge... (0%) ## show progress as %
+    testing the docker daemon bridge...
     test results : success/failure ## if failure ask user "something went wrong , retry or abort ? [retry/abort]"
 
     you're all good to go ! run "dockup" to start a foreground process or "dockup daemon start" to start a background

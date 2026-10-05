@@ -13,7 +13,7 @@ shutdown, doctor, upgrade, version, help, hidden `__serve`).
 | `download` | Progress fetch with 30-min timeout, HEAD size probes |
 | `docker` | In-distro scripts: install / configure / upgrade / repair / test / wait, engine package set |
 | `setup` | Full setup flow (+ `--path`/`--dry-run`), uninstall |
-| `relay` | `ServeEx` pipe (+ optional TCP) bridge, message-mode EOF, byte-tracked teardown, loud-500 |
+| `relay` | `ServeEx` pipe (+ `docker_engine` mirror when free, + optional TCP) bridge, message-mode EOF, byte-tracked teardown, loud-500, ctx-cancelled bridges |
 | `daemon` | Detached `__serve` lifecycle (PID liveness, pipe waits) |
 | `doctor` | Checks + stale-state repair + `--fix` engine reinstall |
 | `restore` | Lightweight delta restore (snapshot diff, engine reinstall, config rescue) + `--full` reinstall |

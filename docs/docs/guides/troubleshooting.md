@@ -4,6 +4,7 @@
 |---|---|
 | `dockup has not been setup yet run "dockup setup" to set it up.` | Nothing installed — run `dockup setup` |
 | `pipe is held by another program` / `pipe held by another program, not dockup` | Something else holds `dockup_engine` (a second dockup foreground/daemon, never Docker Desktop — that owns `docker_engine`) — stop it first |
+| Bare `docker` talks to the wrong daemon | Docker Desktop holds the default pipe — stop it, or point at dockup explicitly with `-H npipe:////./pipe/dockup_engine` |
 | `ps` shows `starting...` | Bridge is up, engine still booting — wait; it flips to `running` via systemd self-heal |
 | `dockup is not installed — autostart skipped` | Login boot with nothing installed — run `dockup setup` first |
 | `stopped (stale daemon pid ... — run dockup doctor)` | Crash/reboot leftover — `dockup doctor` clears it |

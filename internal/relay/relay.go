@@ -18,6 +18,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/CHE3MZ/dockup/internal/config"
@@ -28,6 +29,12 @@ import (
 
 // PipeName re-exports the default pipe.
 const PipeName = config.PipeName
+
+// DefaultDockerPipe is Docker Desktop's conventional pipe. dockup serves it
+// as a convenience mirror ONLY when nothing else holds it, so bare `docker`
+// commands work on machines without Docker Desktop. A held pipe is never
+// hijacked: the mirror is skipped and the caller is told why.
+const DefaultDockerPipe = `\\.\pipe\docker_engine`
 
 func dbg(format string, a ...any) {
 	if os.Getenv("DOCKUP_DEBUG") != "" {
@@ -119,11 +126,37 @@ func WaitDeadOn(pipe string, timeout time.Duration) bool {
 	return false
 }
 
+// serveListener bridges every accepted connection until ctx ends.
+func serveListener(ctx context.Context, l net.Listener, distro string) {
+	go func() {
+		<-ctx.Done()
+		_ = l.Close()
+	}()
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					time.Sleep(50 * time.Millisecond)
+					continue
+				}
+			}
+			go bridgeConn(ctx, c, distro)
+		}
+	}()
+}
+
 // ServeEx serves pipe plus, when useTCP is true, a 127.0.0.1:port bridge.
-// The pipe is served in message mode so client stdin CloseWrite arrives as
-// EOF (lets `docker run -i` containers see stdin end). Stops on ctx cancel.
+// When the default docker_engine pipe is free it is served too as a mirror
+// (same per-connection bridge), and onMirror — when non-nil — is invoked
+// once at startup reporting whether the mirror is up. The pipes are served
+// in message mode so client stdin CloseWrite arrives as EOF (lets
+// `docker run -i` containers see stdin end). Stops on ctx cancel.
 // One goroutine (+ one wsl.exe) per connection.
-func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) error {
+func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int, onMirror func(served bool)) error {
 	if distro == "" {
 		return fmt.Errorf("no distro")
 	}
@@ -143,10 +176,27 @@ func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) er
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go func() {
-		<-ctx.Done()
-		_ = l.Close()
-	}()
+
+	// Mirror first, serve second: a live main pipe then implies the callback
+	// below already ran, so parents reading state after WaitAlive never race it.
+	mirror := false
+	var ml net.Listener
+	if !strings.EqualFold(pipe, DefaultDockerPipe) {
+		if m, merr := winio.ListenPipe(DefaultDockerPipe, &winio.PipeConfig{MessageMode: true}); merr == nil {
+			mirror = true
+			ml = m
+			defer func() { _ = ml.Close() }()
+		} else {
+			dbg("default pipe held, mirror skipped: %v", merr)
+		}
+	}
+	if onMirror != nil {
+		onMirror(mirror)
+	}
+	serveListener(ctx, l, distro)
+	if mirror {
+		serveListener(ctx, ml, distro)
+	}
 
 	if useTCP {
 		addr := fmt.Sprintf("127.0.0.1:%d", port)
@@ -155,46 +205,12 @@ func ServeEx(ctx context.Context, distro, pipe string, useTCP bool, port int) er
 			return fmt.Errorf("listen %s: %w", addr, err)
 		}
 		defer func() { _ = tl.Close() }()
-		go func() {
-			<-ctx.Done()
-			_ = tl.Close()
-		}()
-		go func() {
-			for {
-				c, err := tl.Accept()
-				if err != nil {
-					select {
-					case <-ctx.Done():
-						return
-					default:
-						time.Sleep(50 * time.Millisecond)
-						continue
-					}
-				}
-				go bridgeConn(c, distro)
-			}
-		}()
+		serveListener(ctx, tl, distro)
 		dbg("tcp bridge on %s", addr)
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
-		pc, err := l.Accept()
-		if err != nil {
-			select {
-			case <-ctx.Done():
-				return nil
-			default:
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
-		}
-		go bridgeConn(pc, distro)
-	}
+	<-ctx.Done()
+	return nil
 }
 
 // gatewayError is served when the backend dies before producing any output.
@@ -207,7 +223,7 @@ type sideResult struct {
 	n    int64
 }
 
-func bridgeConn(client net.Conn, distro string) {
+func bridgeConn(ctx context.Context, client net.Conn, distro string) {
 	defer func() { _ = client.Close() }()
 	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--", // #nosec G204 -- fixed binary and argv; distro is our constant, never a shell
 		"socat", "STDIO", "UNIX-CONNECT:/var/run/docker.sock")
@@ -228,6 +244,17 @@ func bridgeConn(client net.Conn, distro string) {
 		return
 	}
 	dbg("bridge wsl pid %d", cmd.Process.Pid)
+	// Shutdown slays in-flight bridges: without this, streaming clients
+	// (logs -f) orphan wsl.exe processes and stall teardown.
+	gone := make(chan struct{})
+	defer close(gone)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = cmd.Process.Kill()
+		case <-gone:
+		}
+	}()
 	// Teardown rules (message-mode pipe: a client stdin CloseWrite arrives
 	// here as EOF, so stdin finishing first is NORMAL, not a wedge):
 	// - daemon side finishes first: the exchange is over, reap immediately
@@ -278,6 +305,12 @@ func bridgeConn(client net.Conn, distro string) {
 		case <-timer.C:
 		}
 		timer.Stop()
+	}
+	// A bridge reaped by shutdown stays quiet: the client is gone with us,
+	// so a gateway error here would only pollute the daemon log.
+	if ctx.Err() != nil {
+		dbg("bridge reaped by shutdown (wait=%v)", werr)
+		return
 	}
 	switch {
 	case werr != nil && outN == 0:

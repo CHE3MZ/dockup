@@ -16,6 +16,9 @@ import (
 type Daemon struct {
 	PID       int    `json:"pid"`
 	StartedAt string `json:"startedAt"`
+	// Mirror reports whether the child also serves the default
+	// docker_engine pipe. Absent (false) in old state files.
+	Mirror bool `json:"mirror"`
 }
 
 // Snapshot records the distro's explicitly-installed package set right

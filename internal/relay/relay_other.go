@@ -42,6 +42,6 @@ func WaitAliveOn(_ string, _ time.Duration) bool { return false }
 func WaitDeadOn(_ string, _ time.Duration) bool { return true }
 
 // ServeEx errors off Windows.
-func ServeEx(_ context.Context, _ string, _ string, _ bool, _ int) error {
+func ServeEx(_ context.Context, _ string, _ string, _ bool, _ int, _ func(bool)) error {
 	return errWindowsOnly
 }

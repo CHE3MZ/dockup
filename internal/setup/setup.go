@@ -57,7 +57,7 @@ func askInstallPath(cfg userconfig.Config, flagPath string) (string, error) {
 		def = filepath.FromSlash(cfg.DefaultPath)
 	}
 	fmt.Printf("%s\n", ui.White("where do you want to install the dockup distro?"))
-	fmt.Printf("%s ", ui.Gray(fmt.Sprintf("enter path e.g D:/WSL [default: %s]:", filepath.ToSlash(def))))
+	fmt.Printf("%s ", ui.Gray(fmt.Sprintf("enter path e.g D:/WSL/Dockup [default: %s]:", filepath.ToSlash(def))))
 	r := bufio.NewReader(os.Stdin)
 	line, _ := r.ReadString('\n')
 	if strings.TrimSpace(line) == "" {
@@ -141,7 +141,9 @@ func RunEx(o Options) int {
 	}
 
 	// 1. Download (primary OCI tar.gz, fallback legacy tar.xz).
-	logx.Info("installing debian... (0/%s mb)", totalMB)
+	// Single console line: the \r ticks below rewrite it in place instead
+	// of leaving a stale duplicate behind.
+	fmt.Printf("installing debian... (0/%s mb)", totalMB)
 	if err := download.Fetch(url, dest, func(done, tot int64) {
 		t := tot
 		if t < 0 {
@@ -159,38 +161,48 @@ func RunEx(o Options) int {
 	}
 	fmt.Printf("\n")
 
-	// 2. Import.
-	logx.Info("importing debian into WSL as \"dockup\"... (0%%)")
+	// 2. Import. wsl --import reports no progress, so a live elapsed timer
+	// instead of a fake percentage that would sit at 0% for minutes.
+	spImport := ui.NewSpinner(nil, "importing debian into WSL as \"dockup\"...")
+	spImport.Start()
 	if err := os.MkdirAll(installDir, 0o700); err != nil {
+		spImport.Stop()
 		logx.Err("mkdir wsl dir: %v", err)
 		return fail()
 	}
 	if st, err := os.Stat(dest); err == nil {
 		logx.Info("downloaded %s (%d MB) -> %s", config.ArchTarName(arch), st.Size()/(1024*1024), dest)
 	} else {
+		spImport.Stop()
 		logx.Err("download missing at %s: %v", dest, err)
 		return fail()
 	}
 	if err := wsl.Import(config.DistroName, installDir, dest); err != nil {
+		spImport.Stop()
 		logx.Err("import failed: %v", err)
 		return fail()
 	}
-	logx.Info("importing debian into WSL as \"dockup\"... (100%%)")
+	spImport.Done()
 
 	// 3. Test WSL.
-	logx.Info("testing dockup on WSL... (please wait.)")
+	spWSL := ui.NewSpinner(nil, "testing dockup on WSL... (please wait.)")
+	spWSL.Start()
 	if _, err := wsl.Exec(config.DistroName, 30*time.Second, "sh", "-c", "echo ok"); err != nil {
+		spWSL.Stop()
 		logx.Info("test results : failure")
 		if askRetryAbort() {
 			return Run(arch)
 		}
 		return fail()
 	}
+	spWSL.Done()
 	logx.Info("test results : success")
 
 	// 4. Install docker.
-	logx.Info("installing docker... (0%%)")
+	spInstall := ui.NewSpinner(nil, "installing docker...")
+	spInstall.Start()
 	if err := docker.Install(config.DistroName); err != nil {
+		spInstall.Stop()
 		logx.Info("test results : failure")
 		logx.Err("%v", err)
 		if askRetryAbort() {
@@ -198,11 +210,13 @@ func RunEx(o Options) int {
 		}
 		return fail()
 	}
-	logx.Info("installing docker... (100%%)")
+	spInstall.Done()
 
 	// 5. Configure.
-	logx.Info("configuring docker...  (0%%)")
+	spConfigure := ui.NewSpinner(nil, "configuring docker...")
+	spConfigure.Start()
 	if err := docker.Configure(config.DistroName); err != nil {
+		spConfigure.Stop()
 		logx.Info("test results : failure")
 		logx.Err("%v", err)
 		if askRetryAbort() {
@@ -210,11 +224,13 @@ func RunEx(o Options) int {
 		}
 		return fail()
 	}
-	logx.Info("configuring docker...  (100%%)")
+	spConfigure.Done()
 
 	// 6. Test docker.
-	logx.Info("testing docker... (0%%)")
+	spTest := ui.NewSpinner(nil, "testing docker...")
+	spTest.Start()
 	if err := docker.WaitDaemon(config.DistroName, 90*time.Second); err != nil {
+		spTest.Stop()
 		logx.Info("test results : failure")
 		logx.Err("%v", err)
 		if askRetryAbort() {
@@ -222,11 +238,12 @@ func RunEx(o Options) int {
 		}
 		return fail()
 	}
+	spTest.Done()
 	logx.Info("test results : success")
 
 	// 7. Bridge test (ephemeral relay is implicitly covered by pipe check;
 	// full bridge verified on first foreground/daemon start).
-	logx.Info("testing the docker daemon bridge... (0%%)")
+	logx.Info("testing the docker daemon bridge...")
 	if relay.AliveOn(cfg.EffectivePipe()) {
 		logx.Info("note: pipe already held (another dockup running?)")
 	}

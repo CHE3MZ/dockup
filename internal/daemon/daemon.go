@@ -63,7 +63,7 @@ func Start() error {
 			return fmt.Errorf("dockup has not been setup yet run \"dockup setup\" to set it up")
 		}
 		if relay.AliveOn(pipe) && s.Daemon.PID == 0 {
-			return fmt.Errorf("dockup is already running in the foreground — stop it with Ctrl+C first")
+			return fmt.Errorf("dockup is already running in the foreground — stop it with Ctrl+C or run dockup shutdown")
 		}
 		if s.Daemon.PID != 0 {
 			if processAlive(s.Daemon.PID) {
@@ -105,8 +105,15 @@ func Start() error {
 		startErr = fmt.Errorf("helper failed to come up (pipe %s never answered)", pipe)
 		return startErr
 	}
+	// The child records the mirror outcome in state before serving, so a
+	// live main pipe implies the flag below is already settled — no poll.
 	s, _ := state.Load()
 	logx.Ok("dockup started (daemon pid %d, pipe %s)", s.Daemon.PID, pipe)
+	if s.Daemon.Mirror {
+		logx.Ok("also serving the default docker pipe (%s) — plain docker commands work", relay.DefaultDockerPipe)
+	} else if relay.AliveOn(relay.DefaultDockerPipe) {
+		logx.Info("default docker pipe held by another program — use -H npipe:////./pipe/dockup_engine")
+	}
 	if ucfg.WithDefaults().UseTCP {
 		logx.Info("tcp bridge on %s", ucfg.WithDefaults().TCPAddr())
 	}
@@ -161,9 +168,13 @@ func Status() int {
 			tcpNote = ", tcp " + ucfg.TCPAddr() + " down"
 		}
 	}
+	mirrorNote := ""
+	if daemonUp && s.Daemon.Mirror {
+		mirrorNote = ", default pipe ok"
+	}
 	switch {
 	case daemonUp && alive:
-		logx.Ok("running (daemon pid %d, pipe ok%s)", s.Daemon.PID, tcpNote)
+		logx.Ok("running (daemon pid %d, pipe ok%s%s)", s.Daemon.PID, tcpNote, mirrorNote)
 		return 0
 	case alive && s.Installed && s.Daemon.PID == 0:
 		logx.Info("running (foreground process holds the pipe%s)", tcpNote)

@@ -35,7 +35,10 @@ docker -H npipe:////./pipe/dockup_engine run --rm hello-world
 dockup daemon stop            # stop when you're done
 ```
 
-#### *Prefer the foreground? Just run `dockup` and Ctrl+C to stop.*
+#### *Prefer the foreground? Just run `dockup` and Ctrl+C to stop.
+
+No Docker Desktop around? While dockup runs, plain `docker ...` (no `-H`)
+works too — the default pipe is mirrored automatically.*
 
 ## Everyday commands
 

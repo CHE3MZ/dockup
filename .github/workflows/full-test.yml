@@ -103,6 +103,11 @@ jobs:
       - name: doctor --fix on healthy engine
         timeout-minutes: 10
         run: .\dockup.exe doctor --fix
+      - name: record default pipe pre-state
+        run: |
+          $pre = Test-Path '\\.\pipe\docker_engine'
+          if ($pre) { 'held' } else { 'free' } | Set-Content $env:TEMP\mirror-pre.txt
+          exit 0
       - name: daemon start
         run: .\dockup.exe daemon start
       - name: daemon status
@@ -182,6 +187,27 @@ jobs:
             docker -H $H version
             if ($LASTEXITCODE -ne 0) { throw 'version via pipe failed twice' }
           }
+          exit 0
+      - name: bare docker via default-pipe mirror
+        run: |
+          $pre = (Get-Content $env:TEMP\mirror-pre.txt -Raw).Trim()
+          $o = .\dockup.exe daemon restart 2>&1
+          $j = ($o -join "`n")
+          $vPipe = docker -H npipe:////./pipe/dockup_engine version --format '{{.Server.Version}}'
+          if (!$vPipe) { throw 'no server version via dockup_engine pipe' }
+          if ($j -notmatch 'also serving') {
+            Write-Output 'mirror not claimed (default pipe held) — nothing to prove'
+            exit 0
+          }
+          if ($pre -eq 'held') {
+            Write-Output 'WARNING: mirror claimed but pipe pre-existed — soft check only'
+            exit 0
+          }
+          Remove-Item Env:\DOCKER_HOST -ErrorAction SilentlyContinue
+          $vBare = docker version --format '{{.Server.Version}}'
+          if ($LASTEXITCODE -ne 0) { throw 'bare docker via mirror failed' }
+          if ($vBare -ne $vPipe) { throw "bare docker answered a different daemon: [$vBare] vs [$vPipe]" }
+          Write-Output "bare docker answered our daemon ($vBare)"
           exit 0
       - name: hello-world via pipe
         timeout-minutes: 5
@@ -371,6 +397,10 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'version via foreground failed' }
             .\dockup.exe daemon start
             if ($LASTEXITCODE -ne 1) { throw "daemon start while foreground up should refuse, got $LASTEXITCODE" }
+            .\dockup.exe shutdown
+            if ($LASTEXITCODE -ne 0) { throw 'shutdown should stop the foreground too' }
+            try { Wait-Process -Id $p.Id -Timeout 30 }
+            catch { throw 'foreground survived shutdown' }
           } finally {
             Stop-Process -Id $p.Id -Force -ErrorAction Continue
           }

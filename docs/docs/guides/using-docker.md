@@ -4,6 +4,11 @@ Any Docker client that speaks `npipe://` works: the `docker.exe` from
 [docker.com](https://www.docker.com/), `scoop install docker`, VS Code's
 Docker extension (set its host), and Compose.
 
+No flags needed on most machines: while dockup runs, it also serves the
+default `docker_engine` pipe, so plain `docker ps` just works. (If Docker
+Desktop is running and holds that name, keep using `-H` / `DOCKER_HOST`
+below.)
+
 ## Connection strings
 
 | Bridge | Address |

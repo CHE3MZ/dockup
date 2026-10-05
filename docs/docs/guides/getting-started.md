@@ -50,8 +50,11 @@ running     off         yes         452 MB    128 MB
 
 ```powershell
 dockup daemon stop   # stop the background bridge (distro stays warm for fast restart)
-dockup shutdown      # stop everything and terminate the distro (ps => stopped)
+dockup shutdown      # stop everything, foreground included, and terminate the distro (ps => stopped)
 ```
+
+Ctrl+C not stopping the foreground? Run `dockup shutdown` from another
+terminal — it stops the stuck foreground too.
 
 ## Starting at Windows login (opt-in)
 

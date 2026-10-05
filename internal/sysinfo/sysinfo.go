@@ -42,21 +42,18 @@ func DirSize(dir string) (uint64, error) {
 	return total, err
 }
 
-// DockupWindowsRSS sums the working-set bytes of all dockup.exe processes
-// except the caller, via tasklist CSV (inbox on Windows, no new
-// dependencies). The memory figure is digits-only parsed, so it is immune
-// to locale thousand separators. Zero when none run or tasklist is absent.
-func DockupWindowsRSS() uint64 {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "tasklist",
-		"/FI", "IMAGENAME eq dockup.exe", "/FO", "CSV", "/NH").Output()
-	if err != nil {
-		return 0
-	}
-	self := os.Getpid()
-	var total uint64
-	for _, line := range strings.Split(string(out), "\n") {
+// dockupProc is one tasklist row for our own binary.
+type dockupProc struct {
+	pid int
+	kb  uint64
+}
+
+// parseTasklist extracts dockup.exe rows (any casing) except self from
+// tasklist CSV output. Pure (unit-tested): the memory figure is digits-only
+// parsed, so it is immune to locale thousand separators.
+func parseTasklist(out string, self int) []dockupProc {
+	var procs []dockupProc
+	for _, line := range strings.Split(out, "\n") {
 		f := splitCSV(strings.TrimSpace(line))
 		if len(f) < 5 || !strings.EqualFold(f[0], "dockup.exe") {
 			continue
@@ -69,7 +66,41 @@ func DockupWindowsRSS() uint64 {
 		if err != nil {
 			continue
 		}
-		total += kb * 1024
+		procs = append(procs, dockupProc{pid: pid, kb: kb})
+	}
+	return procs
+}
+
+// dockupProcs lists running dockup.exe processes except the caller, via
+// tasklist CSV (inbox on Windows, no new dependencies).
+func dockupProcs() []dockupProc {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "tasklist",
+		"/FI", "IMAGENAME eq dockup.exe", "/FO", "CSV", "/NH").Output()
+	if err != nil {
+		return nil
+	}
+	return parseTasklist(string(out), os.Getpid())
+}
+
+// DockupPIDs returns the PIDs of other running dockup.exe processes.
+// Image-name verified, so a reused PID can never match an unrelated process
+// — safe for shutdown to stop an unresponsive foreground.
+func DockupPIDs() []int {
+	var pids []int
+	for _, p := range dockupProcs() {
+		pids = append(pids, p.pid)
+	}
+	return pids
+}
+
+// DockupWindowsRSS sums the working-set bytes of all dockup.exe processes
+// except the caller. Zero when none run or tasklist is absent.
+func DockupWindowsRSS() uint64 {
+	var total uint64
+	for _, p := range dockupProcs() {
+		total += p.kb * 1024
 	}
 	return total
 }

@@ -13,7 +13,7 @@ dockup daemon log       # follow the log, read-only, Ctrl+C to exit
 ## Full shutdown and uninstall
 
 ```powershell
-dockup shutdown    # stop everything + terminate the distro
+dockup shutdown    # stop everything (daemon + any foreground) + terminate the distro
 dockup uninstall   # confirm [y/n], unregister the distro, clear state
 ```
 
