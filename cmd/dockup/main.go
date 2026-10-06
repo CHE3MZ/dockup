@@ -517,8 +517,14 @@ func foreground(cfg userconfig.Config) int {
 	// tell the rest of the story.
 	warm := ui.NewSpinner(nil, "warming up the dockup distro...")
 	warm.Start()
-	if _, err := wsl.Exec(config.DistroName, 60*time.Second, "sh", "-c", "echo ok"); err != nil {
+	if _, err := wsl.ExecCtx(ctx, config.DistroName, 60*time.Second, "sh", "-c", "echo ok"); err != nil {
 		warm.Stop()
+		if ctx.Err() != nil {
+			// Interrupted mid-warmup: the watcher already cancelled, the
+			// child is dead, the pipe barely lived — say so and go.
+			fmt.Printf("%s\n", ui.White("shutting down dockup..."))
+			return 130
+		}
 		logx.Warn("distro did not answer during warmup (%v) — continuing anyway (run dockup doctor if the engine never answers)", err)
 	} else {
 		warm.Done()
@@ -546,7 +552,7 @@ func foreground(cfg userconfig.Config) int {
 	}
 	cancel()
 	_ = relay.WaitDeadOn(pipe, 5*time.Second)
-	fmt.Printf("%s\n", ui.White("dockup stopped"))
+	fmt.Printf("%s\n", ui.White("dockup stopped — distro kept warm (shutdown stops it fully)"))
 	return 0
 }
 

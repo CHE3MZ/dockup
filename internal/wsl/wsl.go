@@ -126,7 +126,14 @@ func IsRunning(name string) bool {
 
 // Exec runs `wsl -d <distro> -u root -- <args...>` (quoteless one-liners only).
 func Exec(distro string, timeout time.Duration, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return ExecCtx(context.Background(), distro, timeout, args...)
+}
+
+// ExecCtx is Exec bound to a parent context: cancel kills the child instead
+// of leaving the caller stuck until timeout. Used where Ctrl+C must stay
+// responsive (foreground warmup); everything else keeps plain Exec.
+func ExecCtx(ctx context.Context, distro string, timeout time.Duration, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	full := append([]string{"-d", distro, "-u", "root", "--"}, args...)
 	cmd := exec.CommandContext(ctx, "wsl.exe", full...) // #nosec G204 -- fixed binary, argv never touches a shell

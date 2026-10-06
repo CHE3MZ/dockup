@@ -53,8 +53,10 @@ dockup daemon stop   # stop the background bridge (distro stays warm for fast re
 dockup shutdown      # stop everything, foreground included, and terminate the distro (ps => stopped)
 ```
 
-Ctrl+C not stopping the foreground? Run `dockup shutdown` from another
-terminal — it stops the stuck foreground too.
+Ctrl+C in a foreground stops the bridge the same way `daemon stop` does —
+the distro itself stays warm in both cases (`shutdown` is the only thing
+that stops it). Ctrl+C not working at all? Run `dockup shutdown` from
+another terminal — it stops the stuck foreground too.
 
 ## Starting at Windows login (opt-in)
 

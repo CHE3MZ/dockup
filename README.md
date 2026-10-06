@@ -6,14 +6,13 @@ Docker without Docker Desktop. One small exe sets up its own Debian distro
 inside WSL, runs the Docker engine there, and lets your Windows Docker CLI
 talk to it. Nothing runs in the background unless you say so.
 
-**Full documentation lives here: <https://che3mz.github.io/dockup/>**
+**Full documentation here: <https://che3mz.github.io/dockup/>**
 
 ## Installing Dockup:
 
 #### Via The `GO` package manager:
 ```
 go install github.com/CHE3MZ/dockup/cmd/dockup@latest
-dockup help
 ```
 #### Manually from releases:
 
@@ -35,7 +34,8 @@ docker -H npipe:////./pipe/dockup_engine run --rm hello-world
 dockup daemon stop            # stop when you're done
 ```
 
-#### *Prefer the foreground? Just run `dockup` and Ctrl+C to stop.
+#### *Prefer the foreground? Just run `dockup` and Ctrl+C to stop
+(the bridge stops; the distro stays warm until `dockup shutdown`).
 
 No Docker Desktop around? While dockup runs, plain `docker ...` (no `-H`)
 works too — the default pipe is mirrored automatically.*

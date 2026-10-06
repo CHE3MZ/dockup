@@ -1,0 +1,11 @@
+name: cirrus
+
+on: 
+  workflow_dispatch:
+
+jobs:
+  cirrus:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: cirruslabs/cirrus-action@master
