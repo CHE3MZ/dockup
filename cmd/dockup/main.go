@@ -222,7 +222,7 @@ func usage() {
   ` + ui.Bold("dockup help [command]") + `      Show this help text
   ` + "\n" +
 		ui.Gray("Config File: ~/.dockup/config.json") + `
-  ` + ui.Gray("Docs: ") + ui.Blue("https://che3mz.github.io/dockup/") + `  ` + ui.Gray("Code: ") + ui.Blue("https://github.com/CHE3MZ/dockup") + `
+  ` + ui.Gray("Docs: ") + ui.Blue("https://che3mz.github.io/dockup/") + `
  `)
 }
 
