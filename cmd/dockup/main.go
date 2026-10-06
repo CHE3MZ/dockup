@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -486,6 +487,15 @@ func foreground(cfg userconfig.Config) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	watchConsoleExit(cancel)
+	// Announced the instant a signal arrives (once-guarded), never after
+	// teardown wins a race with it — so an interruption can no longer pass
+	// without a word. Defined up here so the warmup abort below can use it.
+	var downOnce sync.Once
+	sayDown := func() {
+		downOnce.Do(func() {
+			fmt.Printf("%s\n", ui.White("shutting down dockup..."))
+		})
+	}
 	errCh := make(chan error, 1)
 	mirrorCh := make(chan bool, 1)
 	go func() {
@@ -521,9 +531,9 @@ func foreground(cfg userconfig.Config) int {
 	if _, err := wsl.ExecCtx(ctx, config.DistroName, 60*time.Second, "sh", "-c", "echo ok"); err != nil {
 		warm.Stop()
 		if ctx.Err() != nil {
-			// Interrupted mid-warmup: the watcher already cancelled, the
-			// child is dead, the pipe barely lived — say so and go.
-			fmt.Printf("%s\n", ui.White("shutting down dockup..."))
+			// Interrupted mid-warmup: the watcher already cancelled and
+			// announced it, the child is dead, the pipe barely lived.
+			sayDown()
 			return 130
 		}
 		logx.Warn("distro did not answer during warmup (%v) — continuing anyway (run dockup doctor if the engine never answers)", err)
@@ -541,6 +551,7 @@ func foreground(cfg userconfig.Config) int {
 	// stuck exits immediately, so Ctrl+C always terminates one way or both.
 	go func() {
 		<-sig
+		sayDown()
 		cancel()
 		<-sig
 		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
@@ -574,8 +585,15 @@ func serveForever(cfg userconfig.Config) int {
 	sig := make(chan os.Signal, 2)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sig)
+	var downOnce sync.Once
+	sayDown := func() {
+		downOnce.Do(func() {
+			fmt.Printf("%s\n", ui.White("shutting down dockup..."))
+		})
+	}
 	go func() {
 		<-sig
+		sayDown()
 		cancel()
 		<-sig
 		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
