@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -466,6 +467,35 @@ func foreground(cfg userconfig.Config) int {
 	// silence is what makes startup feel hung and Ctrl+C feel dead.
 	fmt.Printf("%s\n", ui.White("Starting dockup..."))
 	ensureProcessedInput()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	watchConsoleExit(cancel)
+	// Announced the instant a signal arrives (once-guarded), never after
+	// teardown wins a race with it — so an interruption can no longer pass
+	// without a word. Armed before anything slow: an interrupt during
+	// startup checks or waits exits 130 instead of falling into unrelated
+	// error paths.
+	var downOnce sync.Once
+	sayDown := func() {
+		downOnce.Do(func() {
+			fmt.Printf("%s\n", ui.White("shutting down dockup..."))
+		})
+	}
+	var interrupted atomic.Bool
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sig)
+	// First interrupt stops gracefully; a second one while teardown is
+	// stuck exits immediately, so Ctrl+C always terminates one way or both.
+	go func() {
+		<-sig
+		interrupted.Store(true)
+		sayDown()
+		cancel()
+		<-sig
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
+		os.Exit(130)
+	}()
 	pipe := cfg.EffectivePipe()
 	s, _ := state.Load()
 	if !s.Installed && !wsl.Exists(config.DistroName) {
@@ -484,17 +514,9 @@ func foreground(cfg userconfig.Config) int {
 		}
 		return 1
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	watchConsoleExit(cancel)
-	// Announced the instant a signal arrives (once-guarded), never after
-	// teardown wins a race with it — so an interruption can no longer pass
-	// without a word. Defined up here so the warmup abort below can use it.
-	var downOnce sync.Once
-	sayDown := func() {
-		downOnce.Do(func() {
-			fmt.Printf("%s\n", ui.White("shutting down dockup..."))
-		})
+	if interrupted.Load() {
+		sayDown()
+		return 130
 	}
 	errCh := make(chan error, 1)
 	mirrorCh := make(chan bool, 1)
@@ -504,6 +526,11 @@ func foreground(cfg userconfig.Config) int {
 		})
 	}()
 	if !relay.WaitAliveOn(pipe, 10*time.Second) {
+		if interrupted.Load() {
+			sayDown()
+			cancel()
+			return 130
+		}
 		select {
 		case err := <-errCh:
 			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
@@ -530,9 +557,10 @@ func foreground(cfg userconfig.Config) int {
 	warm.Start()
 	if _, err := wsl.ExecCtx(ctx, config.DistroName, 60*time.Second, "sh", "-c", "echo ok"); err != nil {
 		warm.Stop()
-		if ctx.Err() != nil {
-			// Interrupted mid-warmup: the watcher already cancelled and
-			// announced it, the child is dead, the pipe barely lived.
+		if interrupted.Load() {
+			// Interrupted mid-warmup: the watcher already cancelled, the
+			// child is dead, the pipe barely lived. (A bare timeout lands
+			// below instead — that path must warn and continue, not exit.)
 			sayDown()
 			return 130
 		}
@@ -544,19 +572,6 @@ func foreground(cfg userconfig.Config) int {
 		fmt.Printf("%s\n", ui.White(fmt.Sprintf("tcp bridge on %s", cfg.TCPAddr())))
 	}
 	fmt.Printf("%s\n", ui.White("Running in the foreground — press Ctrl+C to stop."))
-	sig := make(chan os.Signal, 2)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sig)
-	// First interrupt stops gracefully; a second one while teardown is
-	// stuck exits immediately, so Ctrl+C always terminates one way or both.
-	go func() {
-		<-sig
-		sayDown()
-		cancel()
-		<-sig
-		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
-		os.Exit(130)
-	}()
 	if err := <-errCh; err != nil {
 		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
 		return 1
@@ -564,7 +579,9 @@ func foreground(cfg userconfig.Config) int {
 	cancel()
 	_ = relay.WaitDeadOn(pipe, 5*time.Second)
 	fmt.Printf("%s\n", ui.White("dockup stopped successfully"))
-	return 0
+	// Reaching teardown with a clean relay means ctx was cancelled, and only
+	// the interrupt watcher cancels it — so this exit was user-requested.
+	return 130
 }
 
 // serveForever is the hidden daemon child holding the pipe.
