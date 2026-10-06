@@ -40,7 +40,7 @@ jobs:
           exit 0
       - name: strict flags, version aliases, single error prefix
         run: |
-          $h = .\dockup.exe --help
+          $h = (.\dockup.exe --help) -join "`n"
           if ($h -notmatch 'che3mz.github.io/dockup') { throw 'help missing docs link' }
           $o = .\dockup.exe --version
           if ($o -notmatch '[0-9a-f]{7}|dev') { throw "unstamped --version: $o" }
