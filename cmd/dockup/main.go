@@ -483,6 +483,7 @@ func foreground(cfg userconfig.Config) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	watchConsoleExit(cancel)
+	ensureProcessedInput()
 	errCh := make(chan error, 1)
 	mirrorCh := make(chan bool, 1)
 	go func() {
@@ -547,6 +548,7 @@ func serveForever(cfg userconfig.Config) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	watchConsoleExit(cancel)
+	ensureProcessedInput()
 	sig := make(chan os.Signal, 2)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sig)

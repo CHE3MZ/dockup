@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/CHE3MZ/dockup/internal/config"
@@ -227,6 +228,10 @@ func bridgeConn(ctx context.Context, client net.Conn, distro string) {
 	defer func() { _ = client.Close() }()
 	cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--", // #nosec G204 -- fixed binary and argv; distro is our constant, never a shell
 		"socat", "STDIO", "UNIX-CONNECT:/var/run/docker.sock")
+	// Detached from our console: bridges talk over anonymous pipes and need
+	// no console I/O, while sharing it lets them flip our console input mode
+	// (killing Ctrl+C delivery) and hold console handles past our death.
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000} // CREATE_NO_WINDOW
 	toProc, err := cmd.StdinPipe()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "relay: stdin pipe:", err)
