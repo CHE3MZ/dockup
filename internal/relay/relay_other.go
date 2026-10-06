@@ -11,6 +11,9 @@ import (
 // PipeName stub for non-Windows builds.
 const PipeName = `\\.\pipe\dockup_engine`
 
+// DefaultDockerPipe stub for non-Windows builds.
+const DefaultDockerPipe = `\\.\pipe\docker_engine`
+
 var errWindowsOnly = errors.New("dockup is Windows-only")
 
 // AliveOn always false off Windows.

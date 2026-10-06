@@ -7,3 +7,9 @@ test_task:
   persistent_worker: {}
   script:
     - dist\dockup-windows-amd64.exe help
+
+lint_task:
+  persistent_worker: {}
+  script:
+    - sh scripts\ops\go-bugcheck.sh
+    - sh scripts\ops\go-seccheck.sh

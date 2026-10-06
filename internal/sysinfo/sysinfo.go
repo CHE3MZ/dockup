@@ -48,14 +48,26 @@ type dockupProc struct {
 	kb  uint64
 }
 
-// parseTasklist extracts dockup.exe rows (any casing) except self from
+// selfImageName is our own executable's file name (dockup.exe,
+// dockup-windows-amd64.exe, ...). Matching by it instead of a literal keeps
+// ps/shutdown working no matter what the binary was renamed to.
+func selfImageName() string {
+	if exe, err := os.Executable(); err == nil && exe != "" {
+		if base := filepath.Base(exe); base != "" && base != "." {
+			return base
+		}
+	}
+	return "dockup.exe"
+}
+
+// parseTasklist extracts rows for image (any casing) except self from
 // tasklist CSV output. Pure (unit-tested): the memory figure is digits-only
 // parsed, so it is immune to locale thousand separators.
-func parseTasklist(out string, self int) []dockupProc {
+func parseTasklist(out string, self int, image string) []dockupProc {
 	var procs []dockupProc
 	for _, line := range strings.Split(out, "\n") {
 		f := splitCSV(strings.TrimSpace(line))
-		if len(f) < 5 || !strings.EqualFold(f[0], "dockup.exe") {
+		if len(f) < 5 || !strings.EqualFold(f[0], image) {
 			continue
 		}
 		pid, err := strconv.Atoi(f[1])
@@ -71,20 +83,21 @@ func parseTasklist(out string, self int) []dockupProc {
 	return procs
 }
 
-// dockupProcs lists running dockup.exe processes except the caller, via
-// tasklist CSV (inbox on Windows, no new dependencies).
+// dockupProcs lists running processes of our own binary except the caller,
+// via tasklist CSV (inbox on Windows, no new dependencies).
 func dockupProcs() []dockupProc {
+	image := selfImageName()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "tasklist",
-		"/FI", "IMAGENAME eq dockup.exe", "/FO", "CSV", "/NH").Output()
+	out, err := exec.CommandContext(ctx, "tasklist", // #nosec G204 -- fixed binary; filter is our own exe basename passed as argv, never a shell
+		"/FI", "IMAGENAME eq "+image, "/FO", "CSV", "/NH").Output()
 	if err != nil {
 		return nil
 	}
-	return parseTasklist(string(out), os.Getpid())
+	return parseTasklist(string(out), os.Getpid(), image)
 }
 
-// DockupPIDs returns the PIDs of other running dockup.exe processes.
+// DockupPIDs returns the PIDs of other running processes of our own binary.
 // Image-name verified, so a reused PID can never match an unrelated process
 // — safe for shutdown to stop an unresponsive foreground.
 func DockupPIDs() []int {
@@ -95,8 +108,8 @@ func DockupPIDs() []int {
 	return pids
 }
 
-// DockupWindowsRSS sums the working-set bytes of all dockup.exe processes
-// except the caller. Zero when none run or tasklist is absent.
+// DockupWindowsRSS sums the working-set bytes of all processes of our own
+// binary except the caller. Zero when none run or tasklist is absent.
 func DockupWindowsRSS() uint64 {
 	var total uint64
 	for _, p := range dockupProcs() {

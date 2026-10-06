@@ -212,7 +212,7 @@ func usage() {
   ` + ui.Bold("dockup") + `                     Foreground run (Ctrl+C to stop)
   ` + ui.Bold("dockup setup") + `               Launch the interactive setup wizard
   ` + ui.Bold("dockup uninstall") + `           Uninstall the dockup distro from WSL
-  ` + ui.Bold("dockup restore [--full]") + `      Reset the distro to a clean state
+  ` + ui.Bold("dockup restore [--full]") + `    Reset the distro to a clean state
   ` + ui.Bold("dockup ps") + `                  Show dockup's status
   ` + ui.Bold("dockup daemon") + `              Start | Stop | Restart | Status
   ` + ui.Bold("dockup shutdown") + `            Stop everything
@@ -482,6 +482,7 @@ func foreground(cfg userconfig.Config) int {
 	fmt.Printf("%s\n", ui.White("Starting dockup..."))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	watchConsoleExit(cancel)
 	errCh := make(chan error, 1)
 	mirrorCh := make(chan bool, 1)
 	go func() {
@@ -510,15 +511,21 @@ func foreground(cfg userconfig.Config) int {
 	}
 	fmt.Printf("%s\n", ui.Cyan("use: docker -H npipe:////./pipe/dockup_engine version"))
 	fmt.Printf("%s\n", ui.White("Running in the foreground — press Ctrl+C to stop."))
-	sig := make(chan os.Signal, 1)
+	sig := make(chan os.Signal, 2)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	select {
-	case <-sig:
-	case err := <-errCh:
-		if err != nil {
-			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
-			return 1
-		}
+	defer signal.Stop(sig)
+	// First interrupt stops gracefully; a second one while teardown is
+	// stuck exits immediately, so Ctrl+C always terminates one way or both.
+	go func() {
+		<-sig
+		cancel()
+		<-sig
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
+		os.Exit(130)
+	}()
+	if err := <-errCh; err != nil {
+		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
+		return 1
 	}
 	cancel()
 	_ = relay.WaitDeadOn(pipe, 5*time.Second)
@@ -539,11 +546,16 @@ func serveForever(cfg userconfig.Config) int {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sig := make(chan os.Signal, 1)
+	watchConsoleExit(cancel)
+	sig := make(chan os.Signal, 2)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sig)
 	go func() {
 		<-sig
 		cancel()
+		<-sig
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
+		os.Exit(130)
 	}()
 	if err := relay.ServeEx(ctx, config.DistroName, cfg.EffectivePipe(), cfg.UseTCP, cfg.EffectivePort(), reportMirror); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
@@ -772,14 +784,22 @@ func daemonLog() int {
 
 func cmdShutdown(cfg userconfig.Config) int {
 	_ = daemon.Stop()
-	// Escape hatch for an unresponsive foreground: kill any other dockup.exe
-	// (name-verified, so a reused PID can never hit an unrelated process),
-	// then wait for the pipe to die before terminating the distro.
+	// Escape hatch for an unresponsive foreground: kill any other process of
+	// our own binary (name-verified, so a reused PID can never hit an
+	// unrelated process), then wait for the pipe to die before terminating
+	// the distro. Failures are loud: a silent skip is exactly how a stuck
+	// foreground survives shutdown unnoticed.
 	for _, pid := range sysinfo.DockupPIDs() {
-		if proc, err := os.FindProcess(pid); err == nil {
-			_ = proc.Kill()
-			logx.Info("stopped foreground dockup (pid %d)", pid)
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			logx.Warn("cannot signal pid %d: %v", pid, err)
+			continue
 		}
+		if err := proc.Kill(); err != nil {
+			logx.Warn("cannot stop dockup (pid %d): %v — try an elevated terminal", pid, err)
+			continue
+		}
+		logx.Info("stopped foreground dockup (pid %d)", pid)
 	}
 	_ = relay.WaitDeadOn(cfg.EffectivePipe(), 10*time.Second)
 	_ = wsl.Terminate(config.DistroName)

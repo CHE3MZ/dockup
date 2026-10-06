@@ -8,6 +8,7 @@
 | `ps` shows `starting...` | Bridge is up, engine still booting — wait; it flips to `running` via systemd self-heal |
 | `dockup is not installed — autostart skipped` | Login boot with nothing installed — run `dockup setup` first |
 | `stopped (stale daemon pid ... — run dockup doctor)` | Crash/reboot leftover — `dockup doctor` clears it |
+| Ctrl+C doesn't stop the foreground | Press it again — the second interrupt forces exit. Or run `dockup shutdown` from another terminal |
 | Corrupt `config.json` | Tolerated (warns, continues with defaults); delete it and any command recreates it |
 | `wsl --version` fails | Update WSL (`wsl --update`); systemd needs a recent Store WSL |
 | Setup download stalls | Needs internet; transient files stay in `%TEMP%` (`dockup-rootfs-*.tar.gz`) for forensics |
