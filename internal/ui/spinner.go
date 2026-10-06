@@ -46,7 +46,9 @@ func (s *Spinner) Start() {
 			s.put("%s\n", White(s.text))
 			return
 		}
-		s.lib = bspinner.New(bspinner.CharSets[14], 100*time.Millisecond,
+		// CharSets[9] is plain ASCII (|/-\): braille dots render as choppy
+		// boxes on legacy consoles, and a spinner must survive everywhere.
+		s.lib = bspinner.New(bspinner.CharSets[9], 100*time.Millisecond,
 			bspinner.WithWriter(s.out),
 			bspinner.WithColor("green"),
 			bspinner.WithSuffix(" "+s.text))

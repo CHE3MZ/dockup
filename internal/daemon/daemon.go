@@ -118,19 +118,11 @@ func Start() error {
 	} else {
 		spWarm.Done()
 	}
-	// The child records the mirror outcome in state before serving, so a
-	// live main pipe implies the flag below is already settled — no poll.
 	s, _ := state.Load()
 	logx.Ok("dockup started (daemon pid %d, pipe %s)", s.Daemon.PID, pipe)
-	if s.Daemon.Mirror {
-		logx.Ok("also serving the default docker pipe (%s) — plain docker commands work", relay.DefaultDockerPipe)
-	} else if relay.AliveOn(relay.DefaultDockerPipe) {
-		logx.Info("default docker pipe held by another program — use -H npipe:////./pipe/dockup_engine")
-	}
 	if ucfg.WithDefaults().UseTCP {
 		logx.Info("tcp bridge on %s", ucfg.WithDefaults().TCPAddr())
 	}
-	logx.Info("use: docker -H npipe:////./pipe/dockup_engine version")
 	return nil
 }
 
@@ -161,7 +153,7 @@ func Stop() error {
 	if pid != 0 {
 		ucfg2, _ := userconfig.Load()
 		relay.WaitDeadOn(ucfg2.WithDefaults().EffectivePipe(), 10*time.Second)
-		logx.Ok("dockup stopped — distro kept warm (shutdown stops it fully)")
+		logx.Ok("dockup stopped successfully")
 	}
 	return nil
 }

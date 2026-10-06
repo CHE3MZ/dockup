@@ -503,12 +503,13 @@ func foreground(cfg userconfig.Config) int {
 		cancel()
 		return 1
 	}
-	fmt.Printf("%s\n", ui.Green(fmt.Sprintf("dockup is up on %s", pipe)))
+	fmt.Printf("%s\n", ui.Green("dockup is up and running!"))
 	select {
 	case served := <-mirrorCh:
-		reportMirror(served)
+		recordMirror(served)
 	case <-time.After(5 * time.Second):
 	}
+	fmt.Printf("%s\n", ui.White("waiting for dockup on wsl..."))
 	// Eager boot: the distro otherwise boots lazily on the first client
 	// connection, leaving the first docker command hanging with no word in
 	// this window. Warming it here moves that wait into the open. This does
@@ -532,7 +533,6 @@ func foreground(cfg userconfig.Config) int {
 	if cfg.UseTCP {
 		fmt.Printf("%s\n", ui.White(fmt.Sprintf("tcp bridge on %s", cfg.TCPAddr())))
 	}
-	fmt.Printf("%s\n", ui.Cyan("use: docker -H npipe:////./pipe/dockup_engine version"))
 	fmt.Printf("%s\n", ui.White("Running in the foreground — press Ctrl+C to stop."))
 	sig := make(chan os.Signal, 2)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -552,7 +552,7 @@ func foreground(cfg userconfig.Config) int {
 	}
 	cancel()
 	_ = relay.WaitDeadOn(pipe, 5*time.Second)
-	fmt.Printf("%s\n", ui.White("dockup stopped — distro kept warm (shutdown stops it fully)"))
+	fmt.Printf("%s\n", ui.White("dockup stopped successfully"))
 	return 0
 }
 
@@ -581,23 +581,21 @@ func serveForever(cfg userconfig.Config) int {
 		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
 		os.Exit(130)
 	}()
-	if err := relay.ServeEx(ctx, config.DistroName, cfg.EffectivePipe(), cfg.UseTCP, cfg.EffectivePort(), reportMirror); err != nil {
+	if err := relay.ServeEx(ctx, config.DistroName, cfg.EffectivePipe(), cfg.UseTCP, cfg.EffectivePort(), recordMirror); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
 		return 1
 	}
 	return 0
 }
 
-// reportMirror tells the user whether the default docker_engine pipe is
-// mirrored, and records the outcome in state when this process IS the
-// recorded daemon child (foreground has no daemon PID, so it only prints).
-func reportMirror(served bool) {
-	if served {
-		logx.Ok("also serving the default docker pipe (%s) — plain docker commands work", relay.DefaultDockerPipe)
-	} else {
-		logx.Info("default docker pipe held by another program — use -H npipe:////./pipe/dockup_engine")
-	}
+// recordMirror records the default-pipe mirror outcome in state, but only
+// when this process IS the recorded daemon child (a foreground has no daemon
+// PID, so for it this is a silent no-op after a lock-free read).
+func recordMirror(served bool) {
 	me := os.Getpid()
+	if s, _ := state.Load(); s.Daemon.PID != me {
+		return
+	}
 	_ = state.WithLock(func(s *state.State) error {
 		if s.Daemon.PID == me {
 			s.Daemon.Mirror = served

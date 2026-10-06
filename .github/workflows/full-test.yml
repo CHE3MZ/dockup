@@ -192,11 +192,12 @@ jobs:
       - name: bare docker via default-pipe mirror
         run: |
           $pre = (Get-Content (Join-Path $env:TEMP 'mirror-pre.txt') -Raw).Trim()
-          $o = .\dockup.exe daemon restart 2>&1
-          $j = ($o -join "`n")
+          .\dockup.exe daemon restart | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'daemon restart failed' }
+          $s = Get-Content "$env:APPDATA\dockup\state.json" -Raw | ConvertFrom-Json
           $vPipe = docker -H npipe:////./pipe/dockup_engine version --format '{{.Server.Version}}'
           if (!$vPipe) { throw 'no server version via dockup_engine pipe' }
-          if ($j -notmatch 'also serving') {
+          if ($s.daemon.mirror -ne $true) {
             Write-Output 'mirror not claimed (default pipe held) — nothing to prove'
             exit 0
           }
