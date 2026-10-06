@@ -63,6 +63,28 @@ func TestRenderTable(t *testing.T) {
 	}
 }
 
+func TestStatusColors(t *testing.T) {
+	ui.SetEnabled(true)
+	defer ui.SetEnabled(false)
+	cases := map[string]string{
+		pstable.StatusRunning:  "\x1b[32m", // green
+		pstable.StatusStarting: "\x1b[33m", // yellow
+		pstable.StatusStopped:  "\x1b[90m", // gray, never red
+	}
+	for status, code := range cases {
+		out := pstable.RenderRow(pstable.Row{
+			Status:    status,
+			Autostart: pstable.AutostartText(false),
+			Installed: pstable.InstalledText(false),
+			Size:      "-",
+			Memory:    "-",
+		})
+		if !strings.Contains(out, code+status) {
+			t.Fatalf("status %q missing color %q: %q", status, code, out)
+		}
+	}
+}
+
 func TestRenderStoppedOff(t *testing.T) {
 	ui.SetEnabled(false)
 	out := pstable.RenderRow(pstable.Row{

@@ -12,11 +12,13 @@ func TestPaletteCodes(t *testing.T) {
 	defer ui.SetEnabled(false)
 	cases := map[string]func(string) string{
 		"37": ui.White,
+		"34": ui.Blue,
 		"94": ui.LightBlue,
 		"90": ui.Gray,
 		"33": ui.Yellow,
 		"31": ui.Red,
 		"32": ui.Green,
+		"96": ui.Cyan,
 	}
 	for code, fn := range cases {
 		got := fn("x")

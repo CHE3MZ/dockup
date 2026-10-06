@@ -17,7 +17,8 @@ const (
 	bold  = esc + "1m"
 
 	white     = esc + "37m"
-	lightBlue = esc + "94m" // bright blue, not dark blue
+	blue      = esc + "34m"
+	lightBlue = esc + "94m" // bright blue, never dark blue for text
 	gray      = esc + "90m"
 	yellow    = esc + "33m"
 	red       = esc + "31m"
@@ -58,6 +59,9 @@ func Bold(s string) string { return paint(bold, s) }
 
 // White renders normal white text.
 func White(s string) string { return paint(white, s) }
+
+// Blue renders blue text (links and addresses).
+func Blue(s string) string { return paint(blue, s) }
 
 // LightBlue renders light-blue text (help headers, accents).
 func LightBlue(s string) string { return paint(lightBlue, s) }

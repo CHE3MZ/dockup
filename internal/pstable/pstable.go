@@ -61,10 +61,24 @@ type Row struct {
 	Memory    string
 }
 
-// RenderRow builds the table. Headers are bold, values are plain.
+// coloredStatus paints the one value that is a live signal: green while the
+// engine answers, yellow while it boots, gray when stopped (a stopped distro
+// is normal, not an error, so never red).
+func coloredStatus(s string) string {
+	switch s {
+	case StatusRunning:
+		return ui.Green(s)
+	case StatusStarting:
+		return ui.Yellow(s)
+	default:
+		return ui.Gray(s)
+	}
+}
+
+// RenderRow builds the table. Headers are bold, values plain except STATUS.
 func RenderRow(r Row) string {
 	headers := []string{"STATUS", "AUTOSTART", "INSTALLED", "SIZE", "MEMORY"}
-	values := []string{r.Status, r.Autostart, r.Installed, r.Size, r.Memory}
+	values := []string{coloredStatus(r.Status), r.Autostart, r.Installed, r.Size, r.Memory}
 	widths := make([]int, len(headers))
 	for i := range headers {
 		widths[i] = max(len(headers[i]), len(values[i])) + 4

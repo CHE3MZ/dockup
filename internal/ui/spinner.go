@@ -1,10 +1,8 @@
 // Spinner is a single-line indeterminate progress indicator for long steps
-// (import, apt install) that cannot report real percentages.
-//
-// Interactive terminals get a live rewrite: `\r<text> <frame> (<elapsed>s)`
-// ticking until Done prints `\r<text> done (<elapsed>s)`. Anywhere colors are
-// disabled (piped output, CI logs) it degrades to two plain lines — start and
-// done — so logs stay grep-able.
+// (import, apt install) that cannot report real percentages. It wraps
+// briandowns/spinner: interactive terminals get a live braille animation,
+// while piped output and CI logs degrade to two plain lines (start + done)
+// so logs stay grep-able.
 package ui
 
 import (
@@ -13,22 +11,18 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	bspinner "github.com/briandowns/spinner"
 )
-
-// spinnerFrames are ASCII-only so legacy consoles render them.
-var spinnerFrames = []string{"|", "/", "-", "\\"}
-
-// spinnerFrame cycles frames (pure, unit-tested).
-func spinnerFrame(i int) string { return spinnerFrames[i%len(spinnerFrames)] }
 
 // Spinner tracks one running step. Zero value is useless; use NewSpinner.
 type Spinner struct {
-	out   io.Writer
-	text  string
-	start time.Time
-	stop  chan struct{}
-	once  sync.Once
-	wg    sync.WaitGroup
+	out      io.Writer
+	text     string
+	lib      *bspinner.Spinner
+	once     sync.Once
+	started  bool
+	finished bool
 }
 
 // NewSpinner builds a spinner writing to out (nil means stdout).
@@ -36,7 +30,7 @@ func NewSpinner(out io.Writer, text string) *Spinner {
 	if out == nil {
 		out = os.Stdout
 	}
-	return &Spinner{out: out, text: text, stop: make(chan struct{})}
+	return &Spinner{out: out, text: text}
 }
 
 // put writes progress output; errors are dropped (best-effort display).
@@ -44,63 +38,45 @@ func (s *Spinner) put(format string, a ...any) {
 	_, _ = fmt.Fprintf(s.out, format, a...)
 }
 
-// Start prints the step and begins ticking (no-op second call).
+// Start prints the step and begins animating (no-op second call).
 func (s *Spinner) Start() {
 	s.once.Do(func() {
-		s.start = time.Now()
+		s.started = true
 		if !Enabled() {
 			s.put("%s\n", White(s.text))
 			return
 		}
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			tick := time.NewTicker(150 * time.Millisecond)
-			defer tick.Stop()
-			for i := 0; ; i++ {
-				select {
-				case <-s.stop:
-					return
-				case <-tick.C:
-					s.put("\r%s %s (%ds)",
-						White(s.text), spinnerFrame(i), int(time.Since(s.start).Seconds()))
-				}
-			}
-		}()
+		s.lib = bspinner.New(bspinner.CharSets[14], 100*time.Millisecond,
+			bspinner.WithWriter(s.out),
+			bspinner.WithColor("green"),
+			bspinner.WithSuffix(" "+s.text))
+		s.lib.Start()
 	})
-}
-
-// halt stops ticking; true if this call stopped it.
-func (s *Spinner) halt() bool {
-	select {
-	case <-s.stop:
-		return false
-	default:
-		close(s.stop)
-	}
-	s.wg.Wait()
-	return true
 }
 
 // Done ends the step as complete.
 func (s *Spinner) Done() {
-	live := s.halt()
-	secs := int(time.Since(s.start).Seconds())
-	if !Enabled() {
-		if live {
-			s.put("%s done\n", White(s.text))
-		}
+	if s.finished {
 		return
 	}
-	s.put("\r%s done (%ds)\n", White(s.text), secs)
+	s.finished = true
+	if s.lib != nil {
+		s.lib.FinalMSG = White("✓ "+s.text+" done") + "\n"
+		s.lib.Stop()
+		return
+	}
+	if s.started {
+		s.put("%s\n", White("✓ "+s.text+" done"))
+	}
 }
 
 // Stop ends the step without the done line (caller reports the failure).
 func (s *Spinner) Stop() {
-	if !s.halt() {
+	if s.finished {
 		return
 	}
-	if Enabled() {
-		s.put("\n")
+	s.finished = true
+	if s.lib != nil {
+		s.lib.Stop()
 	}
 }

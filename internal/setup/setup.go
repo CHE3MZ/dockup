@@ -135,23 +135,17 @@ func RunEx(o Options) int {
 		return dryRunPlan(arch, cfg, installDir)
 	}
 	total := download.Size(url)
-	totalMB := download.FormatMB(total)
-	if total < 0 {
-		totalMB = "?"
-	}
 
 	// 1. Download (primary OCI tar.gz, fallback legacy tar.xz).
-	// Single console line: the \r ticks below rewrite it in place instead
-	// of leaving a stale duplicate behind.
-	fmt.Printf("installing debian... (0/%s mb)", totalMB)
-	if err := download.Fetch(url, dest, func(done, tot int64) {
-		t := tot
-		if t < 0 {
-			t = total
-		}
-		fmt.Printf("\rinstalling debian... (%s/%s mb)", download.FormatMB(done), download.FormatMB(t))
+	// One themed bar line; completion is announced by the downloaded
+	// summary below, so nothing extra is printed here.
+	var last int64
+	pb := ui.NewProgress(total, "installing debian...")
+	if err := download.Fetch(url, dest, func(done, _ int64) {
+		pb.Add(done - last)
+		last = done
 	}); err != nil {
-		fmt.Printf("\n")
+		pb.Finish()
 		logx.Err("primary download failed: %v — trying fallback %s", err, fallback)
 		dest = fallbackDest
 		if err2 := download.Fetch(fallback, dest, nil); err2 != nil {
@@ -159,7 +153,7 @@ func RunEx(o Options) int {
 			return fail()
 		}
 	}
-	fmt.Printf("\n")
+	pb.Finish()
 
 	// 2. Import. wsl --import reports no progress, so a live elapsed timer
 	// instead of a fake percentage that would sit at 0% for minutes.

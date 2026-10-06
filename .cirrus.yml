@@ -2,3 +2,8 @@ build_task:
   persistent_worker: {}
   script:
     - powershell -ExecutionPolicy ByPass -File .\scripts\build.ps1
+
+test_task:
+  persistent_worker: {}
+  script:
+    - dist\dockup-windows-amd64.exe help
