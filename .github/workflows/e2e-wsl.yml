@@ -38,6 +38,32 @@ jobs:
           $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
           if (Test-Path $lnk) { throw 'startup entry left behind' }
           exit 0
+      - name: strict flags, version aliases, single error prefix
+        run: |
+          $o = .\dockup.exe --version
+          if ($o -notmatch '[0-9a-f]{7}|dev') { throw "unstamped --version: $o" }
+          $o = .\dockup.exe -v
+          if ($o -notmatch '[0-9a-f]{7}|dev') { throw "unstamped -v: $o" }
+          $cases = @(
+            @('ps', '--bogus'),
+            @('version', '--bogus'),
+            @('shutdown', '--bogus'),
+            @('uninstall', '--bogus'),
+            @('daemon', 'start', '--bogus'),
+            @('daemon', 'status', '--bogus'),
+            @('setup', '--path'),
+            @('restore', '--path'),
+            @('help', 'ps', 'extra')
+          )
+          foreach ($c in $cases) {
+            & .\dockup.exe @c 2>$null
+            if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for dockup $($c -join ' '), got $LASTEXITCODE" }
+          }
+          $o = .\dockup.exe daemon start 2>&1
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1, got $LASTEXITCODE" }
+          if (($o -join "`n") -match 'dockup: dockup') { throw "stuttering prefix: $o" }
+          if (($o -join "`n") -notmatch 'has not been setup') { throw "wrong refusal: $o" }
+          exit 0
       - name: ps reports foreign pipe holder
         run: |
           $job = Start-Job {

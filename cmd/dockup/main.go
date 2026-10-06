@@ -64,8 +64,17 @@ func run(args []string) int {
 	if len(args) == 0 {
 		return foreground(cfg)
 	}
+	// Like -h, --version short-circuits anywhere it appears first.
+	if args[0] == "--version" || args[0] == "-v" {
+		printVersion()
+		return 0
+	}
 	switch args[0] {
 	case "--help", "-h", "help":
+		if len(args) > 2 {
+			logx.Err("too many arguments (try dockup help [command])")
+			return 1
+		}
 		if len(args) > 1 {
 			return helpTopic(args[1])
 		}
@@ -76,7 +85,11 @@ func run(args []string) int {
 			versionHelp()
 			return 0
 		}
-		fmt.Printf("%s", ui.White(fmt.Sprintf("you're running the %s version.\n", version)))
+		if len(args[1:]) > 0 {
+			logx.Err("dockup version takes no arguments (try dockup version --help)")
+			return 1
+		}
+		printVersion()
 		return 0
 	case "setup":
 		return cmdSetup(cfg, args[1:])
@@ -84,6 +97,10 @@ func run(args []string) int {
 		if hasHelpFlag(args[1:]) {
 			uninstallHelp()
 			return 0
+		}
+		if len(args[1:]) > 0 {
+			logx.Err("dockup uninstall takes no arguments (try dockup uninstall --help)")
+			return 1
 		}
 		return setup.Uninstall()
 	case "restore":
@@ -93,6 +110,10 @@ func run(args []string) int {
 			psHelp()
 			return 0
 		}
+		if len(args[1:]) > 0 {
+			logx.Err("dockup ps takes no arguments (try dockup ps --help)")
+			return 1
+		}
 		return cmdPs(cfg)
 	case "daemon":
 		return cmdDaemon(cfg, args[1:])
@@ -100,6 +121,10 @@ func run(args []string) int {
 		if hasHelpFlag(args[1:]) {
 			shutdownHelp()
 			return 0
+		}
+		if len(args[1:]) > 0 {
+			logx.Err("dockup shutdown takes no arguments (try dockup shutdown --help)")
+			return 1
 		}
 		return cmdShutdown(cfg)
 	case "doctor":
@@ -117,7 +142,7 @@ func run(args []string) int {
 			}
 		}
 		if err := doctor.RunEx(fix); err != nil {
-			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
+			logx.ErrFrom(err)
 			return 1
 		}
 		return 0
@@ -155,11 +180,19 @@ func cmdSetup(cfg userconfig.Config, args []string) int {
 			arm = true
 		case a == "--dry-run":
 			dryRun = true
-		case a == "--path" && i+1 < len(args):
+		case a == "--path":
+			if i+1 >= len(args) {
+				logx.Err("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup setup --help)")
+				return 1
+			}
 			i++
 			pathFlag = args[i]
 		case strings.HasPrefix(a, "--path="):
 			pathFlag = strings.TrimPrefix(a, "--path=")
+			if pathFlag == "" {
+				logx.Err("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup setup --help)")
+				return 1
+			}
 		default:
 			logx.Err("unknown setup flag %q (try dockup setup --help)", a)
 			return 1
@@ -288,11 +321,19 @@ func cmdRestore(args []string) int {
 			amd = true
 		case a == "--arm":
 			arm = true
-		case a == "--path" && i+1 < len(args):
+		case a == "--path":
+			if i+1 >= len(args) {
+				logx.Err("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup restore --help)")
+				return 1
+			}
 			i++
 			pathFlag = args[i]
 		case strings.HasPrefix(a, "--path="):
 			pathFlag = strings.TrimPrefix(a, "--path=")
+			if pathFlag == "" {
+				logx.Err("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup restore --help)")
+				return 1
+			}
 		default:
 			logx.Err("unknown restore flag %q (try dockup restore --help)", a)
 			return 1
@@ -403,9 +444,14 @@ func cmdUpgrade() int {
 	return 0
 }
 
+// printVersion prints the one-line version sentence.
+func printVersion() {
+	fmt.Printf("%s", ui.White(fmt.Sprintf("you're running the %s version.\n", version)))
+}
+
 func versionHelp() {
 	fmt.Print(ui.Header("dockup version") + `
-  Show the dockup version.
+  Show the dockup version (` + ui.Bold("-v") + ` and ` + ui.Bold("--version") + ` do the same thing).
 
 ` + ui.LightBlue("Usage:") + `
   dockup version
@@ -585,30 +631,52 @@ func cmdDaemon(cfg userconfig.Config, args []string) int {
 			return 1
 		}
 	}
+	noArgs := func(sub string) bool {
+		if len(args[1:]) > 0 {
+			logx.Err("dockup daemon %s takes no arguments (try dockup daemon --help)", sub)
+			return false
+		}
+		return true
+	}
 	switch args[0] {
 	case "start":
+		if !noArgs("start") {
+			return 1
+		}
 		if err := daemon.Start(); err != nil {
-			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
+			logx.ErrFrom(err)
 			return 1
 		}
 		return 0
 	case "stop":
+		if !noArgs("stop") {
+			return 1
+		}
 		if err := daemon.Stop(); err != nil {
-			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
+			logx.ErrFrom(err)
 			return 1
 		}
 		return 0
 	case "restart":
+		if !noArgs("restart") {
+			return 1
+		}
 		_ = daemon.Stop()
 		time.Sleep(1 * time.Second)
 		if err := daemon.Start(); err != nil {
-			fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: %v", err)))
+			logx.ErrFrom(err)
 			return 1
 		}
 		return 0
 	case "status":
+		if !noArgs("status") {
+			return 1
+		}
 		return daemon.Status()
 	case "log":
+		if !noArgs("log") {
+			return 1
+		}
 		return daemonLog()
 	case "autostart":
 		return cmdAutostart(args[1:])

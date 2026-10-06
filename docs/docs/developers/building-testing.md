@@ -69,7 +69,7 @@ CI greps these verbatim — never reword: the setup banner flow,
 
 ## Exe icon
 
-`cmd/dockup/winres/winres.json` points at `assets/appicon.png`; the
+`cmd/dockup/winres/winres.json` points at `assets/icon.png`; the
 checked-in `rsrc_windows_*.syso` files are picked up automatically by
 `go build`. Regenerate after changing the art:
 

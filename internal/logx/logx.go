@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/ui"
@@ -29,6 +30,17 @@ func Warn(format string, a ...any) {
 // Err prints to stderr with dockup prefix in red.
 func Err(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "%s\n", ui.Red("dockup: "+fmt.Sprintf(format, a...)))
+}
+
+// ErrFrom prints err with the dockup prefix, adding it only when the message
+// lacks it — package errors that already say "dockup ..." must not stutter
+// into "dockup: dockup ...".
+func ErrFrom(err error) {
+	msg := err.Error()
+	if !strings.HasPrefix(msg, "dockup") {
+		msg = "dockup: " + msg
+	}
+	fmt.Fprintf(os.Stderr, "%s\n", ui.Red(msg))
 }
 
 // Append writes to the daemon log, rotating when over config.MaxLogBytes.
