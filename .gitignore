@@ -2,9 +2,10 @@
 *.DS_Store
 
 # build
-*.exe
+/dockup.exe
 /dockup
 /build/
+/dist/
 dist/
 
 # logs

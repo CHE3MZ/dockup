@@ -1,0 +1,4 @@
+build_task:
+  persistent_worker: {}
+  script:
+    - powershell -ExecutionPolicy ByPass -File .\scripts\build.ps1
