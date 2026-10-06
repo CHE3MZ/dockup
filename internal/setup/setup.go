@@ -5,8 +5,10 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/CHE3MZ/dockup/internal/autostart"
@@ -90,6 +92,18 @@ func RunEx(o Options) int {
 		_ = userconfig.Save(cfg)
 		return 1
 	}
+	// Ctrl+C aborts like declining a prompt (best-effort state hygiene),
+	// then reports interruption instead of success. Without this, the
+	// default disposition kills setup mid-distro-work with no explanation.
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	go func() {
+		<-sigCh
+		logx.Warn("setup interrupted — aborting")
+		fail()
+		os.Exit(130)
+	}()
 	// Already installed?
 	if wsl.Exists(config.DistroName) {
 		fmt.Printf("%s\n", ui.Yellow("Warning : An installation of dockup already exists on WSL, do you wish to delete that installation and let dockup re-install a new dockup instance on WSL ? [y/n]"))

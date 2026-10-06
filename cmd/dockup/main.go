@@ -461,6 +461,10 @@ func versionHelp() {
 
 // foreground starts the relay inline. Refuses if already running or not setup.
 func foreground(cfg userconfig.Config) int {
+	// Narrate before the slow checks (cold wsl.exe spawns take seconds):
+	// silence is what makes startup feel hung and Ctrl+C feel dead.
+	fmt.Printf("%s\n", ui.White("Starting dockup..."))
+	ensureProcessedInput()
 	pipe := cfg.EffectivePipe()
 	s, _ := state.Load()
 	if !s.Installed && !wsl.Exists(config.DistroName) {
@@ -479,11 +483,9 @@ func foreground(cfg userconfig.Config) int {
 		}
 		return 1
 	}
-	fmt.Printf("%s\n", ui.White("Starting dockup..."))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	watchConsoleExit(cancel)
-	ensureProcessedInput()
 	errCh := make(chan error, 1)
 	mirrorCh := make(chan bool, 1)
 	go func() {
@@ -536,6 +538,7 @@ func foreground(cfg userconfig.Config) int {
 
 // serveForever is the hidden daemon child holding the pipe.
 func serveForever(cfg userconfig.Config) int {
+	ensureProcessedInput()
 	s, _ := state.Load()
 	if !s.Installed {
 		fmt.Fprintln(os.Stderr, ui.Red("dockup: helper failed (not setup)"))
@@ -548,7 +551,6 @@ func serveForever(cfg userconfig.Config) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	watchConsoleExit(cancel)
-	ensureProcessedInput()
 	sig := make(chan os.Signal, 2)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sig)
