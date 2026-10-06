@@ -509,6 +509,20 @@ func foreground(cfg userconfig.Config) int {
 		reportMirror(served)
 	case <-time.After(5 * time.Second):
 	}
+	// Eager boot: the distro otherwise boots lazily on the first client
+	// connection, leaving the first docker command hanging with no word in
+	// this window. Warming it here moves that wait into the open. This does
+	// NOT wait for the engine itself — ps reports starting... until dockerd
+	// answers. A failed warmup only warns: serve anyway and let ps/doctor
+	// tell the rest of the story.
+	warm := ui.NewSpinner(nil, "warming up the dockup distro...")
+	warm.Start()
+	if _, err := wsl.Exec(config.DistroName, 60*time.Second, "sh", "-c", "echo ok"); err != nil {
+		warm.Stop()
+		logx.Warn("distro did not answer during warmup (%v) — continuing anyway (run dockup doctor if the engine never answers)", err)
+	} else {
+		warm.Done()
+	}
 	if cfg.UseTCP {
 		fmt.Printf("%s\n", ui.White(fmt.Sprintf("tcp bridge on %s", cfg.TCPAddr())))
 	}

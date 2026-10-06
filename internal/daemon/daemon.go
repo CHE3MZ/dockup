@@ -17,7 +17,9 @@ import (
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/ui"
 	"github.com/CHE3MZ/dockup/internal/userconfig"
+	"github.com/CHE3MZ/dockup/internal/wsl"
 	"golang.org/x/sys/windows"
 )
 
@@ -104,6 +106,17 @@ func Start() error {
 		})
 		startErr = fmt.Errorf("helper failed to come up (pipe %s never answered)", pipe)
 		return startErr
+	}
+	// Eager boot: see foreground — same honesty trade, same warn-and-serve
+	// failure mode. Daemon startups in CI do this in well under a second
+	// on a warm runner.
+	spWarm := ui.NewSpinner(nil, "warming up the dockup distro...")
+	spWarm.Start()
+	if _, err := wsl.Exec(config.DistroName, 60*time.Second, "sh", "-c", "echo ok"); err != nil {
+		spWarm.Stop()
+		logx.Warn("distro did not answer during warmup (%v) — continuing anyway (run dockup doctor if the engine never answers)", err)
+	} else {
+		spWarm.Done()
 	}
 	// The child records the mirror outcome in state before serving, so a
 	// live main pipe implies the flag below is already settled — no poll.

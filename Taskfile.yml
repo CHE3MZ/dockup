@@ -5,7 +5,22 @@ tasks:
     desc: Exec other tasks by default.
     deps:
       - build
+  full:
+    desc: Exec some important tasks.
+    deps:
+      - build
+      - test
+      - lint
   build:
     desc: Local build test into dist.
     cmds:
       - powershell -ExecutionPolicy Bypass -File ./scripts/build.ps1
+  test:
+    desc: Local test minimal
+    cmds:
+      - ./dist/dockup-windows-amd64.exe help
+  lint:
+    desc: Local Lint test (logged into log/)
+    cmds:
+      - sh ./scripts/ops/go-bugcheck.sh
+      - sh ./scripts/ops/go-seccheck.sh
