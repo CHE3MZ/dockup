@@ -1,0 +1,11 @@
+version: '3'
+
+tasks:
+  default:
+    desc: Exec other tasks by default.
+    deps:
+      - build
+  build:
+    desc: Local build test into dist.
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File ./scripts/build.ps1
