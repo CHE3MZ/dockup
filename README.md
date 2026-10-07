@@ -46,6 +46,8 @@ works too — the default pipe is mirrored automatically.*
 - `dockup daemon autostart on` — start with Windows (off by default)
 - `dockup doctor` — something off? start here (`--fix` rebuilds the engine)
 - `dockup restore` — undo tampering, keeps your images
+- `dockup ssh` — a shell inside the distro for debugging
+- `dockup prune` — reclaim distro disk space
 - `dockup shutdown` / `dockup uninstall` — stop everything / remove it all
 
 ### That's the gist — guides, configuration reference, and contributor notes are all on [**the website**](https://che3mz.github.io/dockup/).

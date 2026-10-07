@@ -60,7 +60,8 @@ run "dockup setup" to set it up."
 * dockup setup ## (already explained above)
 * dockup uninstall ## (uninstalling dockup , must show confirmation box are you sure you want to uninstall your dockup
 wsl distro ? [y/n] )
-* dockup ps ## (show dockup status e.g stopped / running )
+* dockup ps [--json] ## (show dockup status e.g stopped / running, --json prints it machine-readable for scripts)
+* dockup uninstall / dockup restore accept [--force] to skip their [y/n] confirmations for scripts.
 
 * dockup daemon ## note that if dockup foreground is running dockup daemon should show "dockup is already running as a 
 foreground process, ctrl + C in order to use the dockup daemon."
@@ -73,6 +74,8 @@ that "dockup is already running as a foreground process, ctrl + C it to stop it 
 - dockup daemon log ## enter interactive log view to see the current full log, read only, ctrl + C to exit
 
 * dockup shutdown ## stop all dockup processes including foreground and background daemon processes
+* dockup ssh [-- command ...] ## open a shell inside the dockup distro, or run one remote command and exit. a leading -- ends dockup's own parsing so everything after it runs remotely verbatim. Ctrl+C reaches the remote command.
+* dockup prune [--all] [--volumes] [--force] ## reclaim distro disk space (a dynamic VHDX only grows) by removing unneeded docker objects inside the distro. --all also removes all unused images, --volumes also removes unused volumes (destroys data). asks [y/n] unless --force is passed.
 * dockup doctor ## repair stale state and fix other issues and do other checks and preflight checks
 * dockup version ## print "you're running the latest/dev version." for now.
 

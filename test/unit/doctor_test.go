@@ -9,6 +9,32 @@ import (
 	"github.com/CHE3MZ/dockup/internal/userconfig"
 )
 
+func TestParseWslMemory(t *testing.T) {
+	cases := []struct {
+		name  string
+		in    string
+		want  uint64
+		found bool
+	}{
+		{"gigabytes", "[wsl2]\nmemory=4GB\n", 4 << 30, true},
+		{"megabytes spaced", "[wsl2]\n  memory = 1536MB  # builds\n", 1536 << 20, true},
+		{"short units", "[wsl2]\nmemory=2G", 2 << 30, true},
+		{"terabytes", "[wsl2]\nmemory=1TB", 1 << 40, true},
+		{"other section ignored", "[experimental]\nmemory=2GB\n", 0, false},
+		{"bare number ignored", "[wsl2]\nmemory=4096\n", 0, false},
+		{"garbage ignored", "[wsl2]\nmemory=huge\n", 0, false},
+		{"empty", "", 0, false},
+		{"no key", "[wsl2]\nprocessors=4\n", 0, false},
+		{"overflow safe", "[wsl2]\nmemory=99999999999999999999GB\n", 0, false},
+	}
+	for _, c := range cases {
+		got, found := doctor.ParseWslMemory(c.in)
+		if found != c.found || got != c.want {
+			t.Fatalf("%s: got (%d, %v) want (%d, %v)", c.name, got, found, c.want, c.found)
+		}
+	}
+}
+
 // seedInstalledRecord fakes a successful setup: state installed plus a
 // current_path pointing somewhere.
 func seedInstalledRecord(t *testing.T) {

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf16"
 )
@@ -216,4 +218,38 @@ func Unregister(distro string) error {
 func Terminate(distro string) error {
 	_, err := runWsl(context.Background(), "--terminate", distro)
 	return err
+}
+
+// Shell runs an interactive command attached to the caller's console (no
+// args means a login shell). Stdin/stdout/stderr are inherited so editors,
+// pagers, and job control behave natively; the first Ctrl+C is left to the
+// child (otherwise the wrapper would die instead of the remote foreground
+// job), a second one falls back to default and kills the wrapper.
+// Returns the child's exit code (1 when unknown).
+func Shell(distro string, args ...string) int {
+	full := []string{"-d", distro, "-u", "root"}
+	if len(args) > 0 {
+		full = append(full, "--")
+		full = append(full, args...)
+	}
+	cmd := exec.Command("wsl.exe", full...) // #nosec G204 -- fixed binary; trailing args are the user's explicit remote command, never a local shell
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sig)
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "dockup: cannot open shell: %v\n", err)
+		return 1
+	}
+	go func() {
+		<-sig
+		signal.Stop(sig)
+	}()
+	if err := cmd.Wait(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			return ee.ExitCode()
+		}
+		return 1
+	}
+	return 0
 }

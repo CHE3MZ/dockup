@@ -311,8 +311,9 @@ func sizeOf(url string) string {
 // distro is already gone it still cleans state and succeeds. A successful
 // uninstall also disables login autostart (entry + flag) so no dangling
 // boot task remains; default_path is kept for the next setup.
-func Uninstall() int {
-	if !askYesNo("Delete the dockup distro and all of its files?") {
+// force skips the confirmation (for scripts).
+func Uninstall(force bool) int {
+	if !force && !askYesNo("Delete the dockup distro and all of its files?") {
 		logx.Info("aborted")
 		return 0
 	}

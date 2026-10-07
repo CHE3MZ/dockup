@@ -106,3 +106,27 @@ func TestInstalledText(t *testing.T) {
 		t.Fatal("bad installed text")
 	}
 }
+
+func TestRenderJSON(t *testing.T) {
+	out, err := pstable.RenderJSON(pstable.Row{
+		Status:    pstable.StatusRunning,
+		Autostart: pstable.AutostartText(true),
+		Installed: pstable.InstalledText(true),
+		Size:      "452 MB",
+		Memory:    "128 MB",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`"status": "running"`,
+		`"autostart": "on"`,
+		`"installed": "yes"`,
+		`"size": "452 MB"`,
+		`"memory": "128 MB"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %s: %s", want, out)
+		}
+	}
+}

@@ -18,3 +18,11 @@
 If the engine answers inside WSL (`wsl -d dockup -u root -- docker version`)
 but not through the pipe, check `dockup daemon log` and `dockup doctor` —
 and if the distro itself was modified, `dockup restore` before anything drastic.
+
+For hands-on debugging, open a shell right inside the distro — no `wsl.exe`
+flags to remember:
+
+```powershell
+dockup ssh                                            # interactive shell
+dockup ssh -- journalctl -u docker.service -n 30      # one remote command
+```

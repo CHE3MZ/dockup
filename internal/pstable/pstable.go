@@ -6,6 +6,7 @@
 package pstable
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -99,4 +100,25 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// RenderJSON renders the row as indented JSON for scripts (ps --json).
+func RenderJSON(r Row) (string, error) {
+	data, err := json.MarshalIndent(struct {
+		Status    string `json:"status"`
+		Autostart string `json:"autostart"`
+		Installed string `json:"installed"`
+		Size      string `json:"size"`
+		Memory    string `json:"memory"`
+	}{
+		Status:    r.Status,
+		Autostart: r.Autostart,
+		Installed: r.Installed,
+		Size:      r.Size,
+		Memory:    r.Memory,
+	}, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

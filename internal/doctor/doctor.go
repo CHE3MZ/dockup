@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,9 +16,62 @@ import (
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
+	"github.com/CHE3MZ/dockup/internal/sysinfo"
 	"github.com/CHE3MZ/dockup/internal/userconfig"
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
+
+// ParseWslMemory extracts a memory= limit in bytes from .wslconfig text,
+// honoring only the [wsl2] section. Returns found=false when absent or
+// unparseable — including bare numbers (no unit means no judgment).
+// Pure (unit-tested).
+func ParseWslMemory(data string) (uint64, bool) {
+	inWsl2 := false
+	for _, raw := range strings.Split(data, "\n") {
+		line := strings.TrimSpace(raw)
+		if i := strings.Index(line, "#"); i >= 0 {
+			line = strings.TrimSpace(line[:i])
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			inWsl2 = strings.EqualFold(strings.TrimSpace(line[1:len(line)-1]), "wsl2")
+			continue
+		}
+		if !inWsl2 {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "memory") {
+			continue
+		}
+		val = strings.TrimSpace(val)
+		j := 0
+		for j < len(val) && val[j] >= '0' && val[j] <= '9' {
+			j++
+		}
+		num, err := strconv.ParseUint(val[:j], 10, 64)
+		if j == 0 || err != nil {
+			continue
+		}
+		var mult uint64
+		switch strings.ToLower(strings.TrimSpace(val[j:])) {
+		case "tb", "t":
+			mult = 1 << 40
+		case "gb", "g":
+			mult = 1 << 30
+		case "mb", "m":
+			mult = 1 << 20
+		case "kb", "k":
+			mult = 1 << 10
+		default:
+			continue
+		}
+		if num > ^uint64(0)/mult {
+			continue
+		}
+		return num * mult, true
+	}
+	return 0, false
+}
 
 // ReconcileDistro checks the WSL distro list once and repairs a
 // confirmed-absent install record: state installed=false plus config
@@ -102,6 +157,23 @@ func RunEx(fix bool) error {
 		}
 		if !ucfg.Autostart && autostart.IsEnabled() {
 			logx.Info("info: Startup entry present but autostart off — run dockup daemon autostart off to remove")
+		}
+	}
+
+	// WSL2 memory: CPU/RAM are global (not per-distro), so guide only and
+	// never write — a .wslconfig edit would affect the user's other distros
+	// too. Informational: never fails the run.
+	if home, herr := os.UserHomeDir(); herr == nil {
+		wslconfig := filepath.Join(home, ".wslconfig")
+		data, rerr := os.ReadFile(wslconfig) // #nosec G304 -- path is our own home dir plus a fixed filename, never remote input
+		if rerr != nil {
+			logx.Info("info: no %s — dockup is happiest with 4GB+; e.g. [wsl2] memory=4GB there (applies after wsl --shutdown, affects all distros)", wslconfig)
+		} else if mem, found := ParseWslMemory(string(data)); !found {
+			logx.Info("info: no memory= limit in %s — consider [wsl2] memory=4GB (applies after wsl --shutdown, affects all distros)", wslconfig)
+		} else if mem < 4<<30 {
+			logx.Warn("memory limit is %s (< 4GB) in %s — builds may OOM; raise memory= (applies after wsl --shutdown, affects all distros)", sysinfo.FormatSize(mem), wslconfig)
+		} else {
+			ok(fmt.Sprintf(".wslconfig memory %s", sysinfo.FormatSize(mem)))
 		}
 	}
 

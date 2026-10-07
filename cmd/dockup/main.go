@@ -100,11 +100,16 @@ func run(args []string) int {
 			uninstallHelp()
 			return 0
 		}
-		if len(args[1:]) > 0 {
-			logx.Err("dockup uninstall takes no arguments (try dockup uninstall --help)")
+		force := false
+		for _, a := range args[1:] {
+			if a == "--force" || a == "-f" {
+				force = true
+				continue
+			}
+			logx.Err("unknown uninstall flag %q (try dockup uninstall --help)", a)
 			return 1
 		}
-		return setup.Uninstall()
+		return setup.Uninstall(force)
 	case "restore":
 		return cmdRestore(args[1:])
 	case "ps":
@@ -112,11 +117,16 @@ func run(args []string) int {
 			psHelp()
 			return 0
 		}
-		if len(args[1:]) > 0 {
-			logx.Err("dockup ps takes no arguments (try dockup ps --help)")
+		jsonOut := false
+		for _, a := range args[1:] {
+			if a == "--json" || a == "-j" {
+				jsonOut = true
+				continue
+			}
+			logx.Err("unknown ps flag %q (try dockup ps --help)", a)
 			return 1
 		}
-		return cmdPs(cfg)
+		return cmdPs(cfg, jsonOut)
 	case "daemon":
 		return cmdDaemon(cfg, args[1:])
 	case "shutdown":
@@ -129,6 +139,10 @@ func run(args []string) int {
 			return 1
 		}
 		return cmdShutdown(cfg)
+	case "ssh":
+		return cmdSSH(args[1:])
+	case "prune":
+		return cmdPrune(args[1:])
 	case "doctor":
 		if hasHelpFlag(args[1:]) {
 			doctorHelp()
@@ -218,10 +232,16 @@ func usage() {
   ` + ui.Bold("dockup ps") + `                  Show dockup's status
   ` + ui.Bold("dockup daemon") + `              Start | Stop | Restart | Status
   ` + ui.Bold("dockup shutdown") + `            Stop everything
+  ` + ui.Bold("dockup ssh [...]") + `           Open a shell inside the distro
+  ` + ui.Bold("dockup prune [--all]") + `       Reclaim distro disk space
   ` + ui.Bold("dockup doctor [--fix]") + `      Repair stale states
   ` + ui.Bold("dockup upgrade") + `             Upgrade the in-distro engine to latest
   ` + ui.Bold("dockup version") + `             Show current version
   ` + ui.Bold("dockup help [command]") + `      Show this help text
+ ` + "\n" + ui.LightBlue("Examples:") + `
+   dockup setup
+   docker -H npipe:////./pipe/dockup_engine run --rm hello-world
+   dockup ssh -- journalctl -u docker.service --no-pager -n 30
   ` + "\n" +
 		ui.Gray("Config File: ~/.dockup/config.json") + `
   ` + ui.Gray("Docs: ") + ui.Blue("https://che3mz.github.io/dockup/") + `
@@ -242,6 +262,10 @@ func helpTopic(name string) int {
 		daemonHelp()
 	case "shutdown":
 		shutdownHelp()
+	case "ssh":
+		sshHelp()
+	case "prune":
+		pruneHelp()
 	case "doctor":
 		doctorHelp()
 	case "upgrade":
@@ -282,7 +306,41 @@ func uninstallHelp() {
   Delete the dockup distro from WSL and clear its saved state.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup uninstall
+  dockup uninstall [--force]
+
+  ` + ui.Bold("--force, -f") + `   Skip the confirmation (for scripts).
+`)
+}
+
+func sshHelp() {
+	fmt.Print(ui.Header("dockup ssh") + `
+  Open a shell inside the dockup distro (great for journalctl, configs,
+  and network debugging), or run one remote command and exit.
+
+` + ui.LightBlue("Usage:") + `
+  dockup ssh [-- command ...]
+
+` + ui.LightBlue("Examples:") + `
+  dockup ssh
+  dockup ssh -- journalctl -u docker.service --no-pager -n 30
+  dockup ssh -- df -h /
+
+  A leading ` + ui.Bold("--") + ` ends dockup's own parsing: everything after it
+  runs remotely verbatim. Ctrl+C reaches the remote command.
+`)
+}
+
+func pruneHelp() {
+	fmt.Print(ui.Header("dockup prune") + `
+  Reclaim distro disk space (a dynamic VHDX only ever grows) by removing
+  unneeded Docker objects inside the distro.
+
+` + ui.LightBlue("Usage:") + `
+  dockup prune [--all] [--volumes] [--force]
+
+  ` + ui.Bold("--all") + `         Also remove all unused images (default: dangling only).
+  ` + ui.Bold("--volumes") + `     Also remove unused volumes (destroys their data).
+  ` + ui.Bold("--force, -f") + `   Skip the confirmation (for scripts).
 `)
 }
 
@@ -302,7 +360,9 @@ func restoreHelp() {
   setup's arch, current install folder).
 
 ` + ui.LightBlue("Usage:") + `
-  dockup restore [--full] [--amd|--arm] [--path=DIR]
+  dockup restore [--full] [--amd|--arm] [--path=DIR] [--force]
+
+  ` + ui.Bold("--force, -f") + `   Skip the confirmation (for scripts).
 `)
 }
 
@@ -313,13 +373,15 @@ func cmdRestore(args []string) int {
 		restoreHelp()
 		return 0
 	}
-	var full, amd, arm bool
+	var full, amd, arm, force bool
 	var pathFlag string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
 		case a == "--full":
 			full = true
+		case a == "--force", a == "-f":
+			force = true
 		case a == "--amd":
 			amd = true
 		case a == "--arm":
@@ -355,7 +417,7 @@ func cmdRestore(args []string) int {
 	if amd || arm {
 		archOverride = arch
 	}
-	return restore.Run(restore.Options{Full: full, Arch: archOverride, Path: pathFlag})
+	return restore.Run(restore.Options{Full: full, Arch: archOverride, Path: pathFlag, Force: force})
 }
 
 func psHelp() {
@@ -652,7 +714,7 @@ func recordMirror(served bool) {
 	})
 }
 
-func cmdPs(cfg userconfig.Config) int {
+func cmdPs(cfg userconfig.Config, jsonOut bool) int {
 	s, _ := state.Load()
 	pipe := cfg.EffectivePipe()
 	alive := relay.AliveOn(pipe)
@@ -674,8 +736,19 @@ func cmdPs(cfg userconfig.Config) int {
 			}
 		}
 	}
+	if jsonOut {
+		out, err := pstable.RenderJSON(row)
+		if err != nil {
+			logx.Err("cannot render status: %v", err)
+			return 1
+		}
+		fmt.Println(out)
+		return 0
+	}
 	fmt.Println(pstable.RenderRow(row))
-	if alive && !s.Installed {
+	if !alive && !s.Installed {
+		fmt.Printf("%s\n", ui.Gray("(not installed — run dockup setup to create it)"))
+	} else if alive && !s.Installed {
 		fmt.Printf("%s\n", ui.Gray("(pipe held by another program, not dockup)"))
 	}
 	if cfg.UseTCP {
@@ -695,6 +768,81 @@ func dockupDistroRSS() uint64 {
 		return 0
 	}
 	return n
+}
+
+// cmdSSH opens a shell in the distro (no args) or runs one remote command.
+// A leading -- ends our parsing: everything after it runs remotely verbatim.
+func cmdSSH(args []string) int {
+	verbatim := false
+	if len(args) > 0 && args[0] == "--" {
+		verbatim = true
+		args = args[1:]
+	}
+	if !verbatim && hasHelpFlag(args) {
+		sshHelp()
+		return 0
+	}
+	s, _ := state.Load()
+	if !s.Installed && !wsl.Exists(config.DistroName) {
+		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
+		return 1
+	}
+	return wsl.Shell(config.DistroName, args...)
+}
+
+// cmdPrune reclaims distro disk space via in-distro docker prune.
+func cmdPrune(args []string) int {
+	if hasHelpFlag(args) {
+		pruneHelp()
+		return 0
+	}
+	var all, volumes, force bool
+	for _, a := range args {
+		switch a {
+		case "--all":
+			all = true
+		case "--volumes":
+			volumes = true
+		case "--force", "-f":
+			force = true
+		default:
+			logx.Err("unknown prune flag %q (try dockup prune --help)", a)
+			return 1
+		}
+	}
+	s, _ := state.Load()
+	if !s.Installed && !wsl.Exists(config.DistroName) {
+		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
+		return 1
+	}
+	what := "stopped containers, unused networks and dangling images"
+	if all {
+		what = "stopped containers, unused networks and all unused images"
+	}
+	if volumes {
+		what += ", plus unused volumes (their data is destroyed)"
+	}
+	if !force {
+		fmt.Printf("%s [y/n]\n", ui.White(fmt.Sprintf("Reclaim space inside the dockup distro? This removes %s.", what)))
+		if !readYes() {
+			logx.Info("aborted")
+			return 0
+		}
+	}
+	if err := docker.Prune(config.DistroName, all, volumes); err != nil {
+		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: prune failed: %v", err)))
+		return 1
+	}
+	logx.Ok("prune complete")
+	return 0
+}
+
+// readYes reports whether stdin answers y/yes (used for confirm prompts).
+func readYes() bool {
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
+	line = strings.ToLower(strings.TrimSpace(line))
+	return line == "y" || line == "yes"
 }
 
 func cmdDaemon(cfg userconfig.Config, args []string) int {

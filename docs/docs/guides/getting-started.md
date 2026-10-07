@@ -45,6 +45,7 @@ running     off         yes         452 MB    128 MB
   still booting), or `stopped`.
 - `AUTOSTART` is `on`/`off` (Windows login autostart).
 - `INSTALLED` is `yes`/`no`, `SIZE` is distro disk use, `MEMORY` its live RAM use.
+- `dockup ps --json` prints the same row machine-readable for scripts.
 
 ## Stopping
 

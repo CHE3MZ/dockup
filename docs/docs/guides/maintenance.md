@@ -18,7 +18,20 @@ dockup uninstall   # confirm [y/n], unregister the distro, clear state
 ```
 
 Uninstall keeps `default_path` for the next setup, removes the Startup entry,
-and is idempotent — running it twice still exits 0.
+and is idempotent — running it twice still exits 0. `--force` skips the
+confirmation (same for `restore`).
+
+## Reclaiming disk space
+
+The distro disk only ever grows. Reclaim Docker objects without reinstalling:
+
+```powershell
+dockup prune            # stopped containers, unused networks, dangling images
+dockup prune --all      # plus all unused images
+dockup prune --volumes  # plus unused volumes (destroys their data)
+```
+
+Every form confirms first (`--force` skips it).
 
 ## Health and repair
 

@@ -121,6 +121,28 @@ func Upgrade(distro string) error {
 	return WaitDaemon(distro, 90*time.Second)
 }
 
+// PruneScript removes unneeded Docker objects inside the distro: stopped
+// containers, unused networks, and dangling images — plus all unused images
+// with all, plus unused volumes (data-destroying) with volumes.
+func PruneScript(all, volumes bool) string {
+	args := ""
+	if all {
+		args += " --all"
+	}
+	if volumes {
+		args += " --volumes"
+	}
+	return "set -eu\ndocker system prune -f" + args + "\n"
+}
+
+// Prune reclaims distro disk space (a dynamic VHDX only grows otherwise).
+func Prune(distro string, all, volumes bool) error {
+	if _, err := wsl.ExecScript(distro, 10*time.Minute, PruneScript(all, volumes)); err != nil {
+		return fmt.Errorf("prune: %w", err)
+	}
+	return nil
+}
+
 // EnginePackages is the dockup-managed set: always reinstalled by repair,
 // never removed by restore's delta cleanup.
 var EnginePackages = []string{

@@ -42,6 +42,10 @@ jobs:
           .\dockup.exe doctor --help
           .\dockup.exe restore --help
           .\dockup.exe help restore
+          .\dockup.exe ssh --help
+          .\dockup.exe help ssh
+          .\dockup.exe prune --help
+          .\dockup.exe help prune
           .\dockup.exe version
       - name: dry run changes nothing
         run: |
@@ -337,6 +341,23 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "attempt $i failed" }
           }
           exit 0
+      - name: ssh one-shot and ps json
+        run: |
+          $o = .\dockup.exe ssh -- echo ssh-ok
+          if ($LASTEXITCODE -ne 0) { throw "ssh failed with $LASTEXITCODE" }
+          if (($o -join "`n") -notmatch 'ssh-ok') { throw "ssh wrong output: $o" }
+          $j = .\dockup.exe ps --json | ConvertFrom-Json
+          if ($j.status -ne 'running') { throw "ps json status = $($j.status)" }
+          if ($j.installed -ne 'yes') { throw "ps json installed = $($j.installed)" }
+          exit 0
+      - name: prune reclaims without touching tagged images
+        timeout-minutes: 5
+        run: |
+          echo y | .\dockup.exe prune
+          if ($LASTEXITCODE -ne 0) { throw "prune failed with $LASTEXITCODE" }
+          $imgs = docker -H npipe:////./pipe/dockup_engine images -q hello-world
+          if (!$imgs) { throw 'prune ate the tagged hello-world image' }
+          exit 0
       - name: upgrade engine to latest
         timeout-minutes: 10
         run: |
@@ -468,9 +489,9 @@ jobs:
           $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
           if (Test-Path $lnk) { throw 'startup entry left behind by uninstall' }
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path not retained: $($c.default_path)" }
-      - name: second uninstall succeeds (idempotent)
+      - name: second uninstall succeeds (idempotent, forced)
         run: |
-          echo y | .\dockup.exe uninstall
+          .\dockup.exe uninstall --force
           if ($LASTEXITCODE -ne 0) { throw "expected exit 0, got $LASTEXITCODE" }
           exit 0
       - name: daemon refuses start when nothing installed

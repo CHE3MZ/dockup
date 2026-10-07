@@ -52,10 +52,12 @@ func RemovalList(current, snapshot []string) []string {
 
 // Options configures a restore run. Arch/Path only apply to --full
 // (lightweight restores in place); empty means current settings.
+// Force skips the confirmation (for scripts).
 type Options struct {
-	Full bool
-	Arch string
-	Path string
+	Full  bool
+	Arch  string
+	Path  string
+	Force bool
 }
 
 // Run restores the distro; full selects the unregister+reinstall path.
@@ -68,7 +70,7 @@ func Run(o Options) int {
 	if o.Full {
 		return runFull(o)
 	}
-	return runLight()
+	return runLight(o.Force)
 }
 
 func runFull(o Options) int {
@@ -83,10 +85,12 @@ func runFull(o Options) int {
 	if installDir == "" {
 		installDir = userconfig.InstallDir()
 	}
-	fmt.Printf("%s [y/n]\n", ui.Yellow("Are you sure you want to fully restore dockup? This will uninstall and reinstall the entire distro."))
-	if !readYes() {
-		logx.Info("aborted")
-		return 0
+	if !o.Force {
+		fmt.Printf("%s [y/n]\n", ui.Yellow("Are you sure you want to fully restore dockup? This will uninstall and reinstall the entire distro."))
+		if !readYes() {
+			logx.Info("aborted")
+			return 0
+		}
 	}
 	return setup.RunEx(setup.Options{Arch: arch, Path: installDir, Cfg: mustConfig()})
 }
@@ -101,7 +105,7 @@ func stateArch() (string, bool) {
 	return st.Arch, true
 }
 
-func runLight() int {
+func runLight(force bool) int {
 	distro := config.DistroName
 	st, _ := state.Load()
 	current, err := docker.ManualPackages(distro)
@@ -123,10 +127,12 @@ func runLight() int {
 	}
 	fmt.Printf("%s\n", ui.White("  rewrite wsl.conf, reinstall engine packages, restart services"))
 	fmt.Printf("%s\n", ui.Yellow("  running containers will stop when the daemon restarts"))
-	fmt.Printf("%s [y/n]\n", ui.White("Are you sure you want to restore dockup? This will reinstall and uninstall some packages and will need an internet connection."))
-	if !readYes() {
-		logx.Info("aborted")
-		return 0
+	if !force {
+		fmt.Printf("%s [y/n]\n", ui.White("Are you sure you want to restore dockup? This will reinstall and uninstall some packages and will need an internet connection."))
+		if !readYes() {
+			logx.Info("aborted")
+			return 0
+		}
 	}
 	if len(removal) > 0 {
 		logx.Info("removing %d added package(s)...", len(removal))
