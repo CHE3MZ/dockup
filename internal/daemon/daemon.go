@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/CHE3MZ/dockup/internal/config"
+	"github.com/CHE3MZ/dockup/internal/doctor"
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
@@ -57,6 +58,13 @@ func Start() error {
 	if ucfg.Autostart {
 		if st, _ := state.Load(); !st.Installed {
 			return fmt.Errorf("dockup is not installed — autostart skipped (run dockup setup first)")
+		}
+	}
+	// State claims an install: prove the distro survived before spawning a
+	// holder for it. Outside the lock below (ReconcileDistro takes it).
+	if st, _ := state.Load(); st.Installed {
+		if present, err := doctor.ReconcileDistro(); err == nil && !present {
+			return fmt.Errorf("distro \"dockup\" is missing from WSL — it may have been removed outside dockup (run dockup doctor, then dockup setup to reinstall)")
 		}
 	}
 	var startErr error
@@ -114,7 +122,21 @@ func Start() error {
 	spWarm.Start()
 	if _, err := wsl.Exec(config.DistroName, 60*time.Second, "sh", "-c", "echo ok"); err != nil {
 		spWarm.Stop()
-		logx.Warn("distro did not answer during warmup (%v) — continuing anyway (run dockup doctor if the engine never answers)", err)
+		// Refuse instead of reporting "started" over a dead backend: take
+		// down the just-spawned child quietly (no misleading stopped line)
+		// and point at repair. The install record stays — the distro exists,
+		// it is just sick, and doctor --fix heals exactly that.
+		_ = state.WithLock(func(s *state.State) error {
+			if s.Daemon.PID != 0 {
+				if proc, perr := os.FindProcess(s.Daemon.PID); perr == nil {
+					_ = proc.Kill()
+				}
+				s.Daemon = state.Daemon{}
+			}
+			return nil
+		})
+		relay.WaitDeadOn(pipe, 5*time.Second)
+		return fmt.Errorf("distro \"dockup\" is present but not responding (%v) — run dockup doctor --fix to repair it", err)
 	} else {
 		spWarm.Done()
 	}

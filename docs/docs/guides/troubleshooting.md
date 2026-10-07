@@ -3,6 +3,8 @@
 | Symptom | Meaning / fix |
 |---|---|
 | `dockup has not been setup yet run "dockup setup" to set it up.` | Nothing installed — run `dockup setup` |
+| `distro "dockup" is missing from WSL` | Removed outside dockup (e.g. `wsl --unregister`) — state was cleared automatically; run `dockup doctor`, then `dockup setup` |
+| `distro "dockup" is present but not responding` | Distro broken — run `dockup doctor --fix` to repair it |
 | `pipe is held by another program` / `pipe held by another program, not dockup` | Something else holds `dockup_engine` (a second dockup foreground/daemon, never Docker Desktop — that owns `docker_engine`) — stop it first |
 | Bare `docker` talks to the wrong daemon | Docker Desktop holds the default pipe — stop it, or point at dockup explicitly with `-H npipe:////./pipe/dockup_engine` |
 | `ps` shows `starting...` | Bridge is up, engine still booting — wait; it flips to `running` via systemd self-heal |

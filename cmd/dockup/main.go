@@ -518,6 +518,14 @@ func foreground(cfg userconfig.Config) int {
 		sayDown()
 		return 130
 	}
+	if s.Installed {
+		// State claims an install: prove the distro survived. An external
+		// wsl --unregister must flip us to not-installed, never serve dead.
+		if present, err := doctor.ReconcileDistro(); err == nil && !present {
+			logx.Err("distro \"dockup\" is missing from WSL — it may have been removed outside dockup. Run dockup doctor, then dockup setup to reinstall.")
+			return 1
+		}
+	}
 	errCh := make(chan error, 1)
 	mirrorCh := make(chan bool, 1)
 	go func() {
@@ -560,11 +568,12 @@ func foreground(cfg userconfig.Config) int {
 		if interrupted.Load() {
 			// Interrupted mid-warmup: the watcher already cancelled, the
 			// child is dead, the pipe barely lived. (A bare timeout lands
-			// below instead — that path must warn and continue, not exit.)
+			// below instead — that path must refuse, not serve dead air.)
 			sayDown()
 			return 130
 		}
-		logx.Warn("distro did not answer during warmup (%v) — continuing anyway (run dockup doctor if the engine never answers)", err)
+		logx.Err("distro \"dockup\" is present but not responding (%v) — run dockup doctor --fix to repair it", err)
+		return 1
 	} else {
 		warm.Done()
 	}
@@ -590,6 +599,10 @@ func serveForever(cfg userconfig.Config) int {
 	s, _ := state.Load()
 	if !s.Installed {
 		fmt.Fprintln(os.Stderr, ui.Red("dockup: helper failed (not setup)"))
+		return 1
+	}
+	if present, err := doctor.ReconcileDistro(); err == nil && !present {
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: helper failed (distro \"dockup\" is missing from WSL — run dockup doctor, then dockup setup to reinstall)"))
 		return 1
 	}
 	if err := userconfig.ValidatePort(cfg.EffectivePort()); cfg.UseTCP && err != nil {

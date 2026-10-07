@@ -18,6 +18,41 @@ import (
 	"github.com/CHE3MZ/dockup/internal/wsl"
 )
 
+// ReconcileDistro checks the WSL distro list once and repairs a
+// confirmed-absent install record: state installed=false plus config
+// current_path cleared. A failed list leaves everything untouched —
+// wsl.Exists-style blindness must never wipe the record on a transient
+// wsl.exe failure. Returns present=false only when absence is confirmed
+// (and the record was cleared); startup gates in foreground, daemon Start,
+// and __serve share this so all three agree on what "installed" means.
+func ReconcileDistro() (present bool, err error) {
+	distroList, err := wsl.List()
+	if err != nil {
+		return true, err
+	}
+	for _, d := range distroList {
+		if strings.EqualFold(strings.TrimSpace(d), config.DistroName) {
+			return true, nil
+		}
+	}
+	if c, cerr := userconfig.Load(); cerr == nil {
+		c = c.WithDefaults()
+		if c.CurrentPath != "" {
+			c.CurrentPath = ""
+			_ = userconfig.Save(c)
+			logx.Info("fixed: cleared stale current_path")
+		}
+	}
+	_ = state.WithLock(func(ns *state.State) error {
+		if ns.Installed {
+			ns.Installed = false
+			logx.Info("fixed: cleared stale installed flag")
+		}
+		return nil
+	})
+	return false, nil
+}
+
 // RunEx is the doctor entry point: checks everything, repairs stale state,
 // and with fix=true reinstalls/reconfigures a broken in-distro engine.
 func RunEx(fix bool) error {
@@ -150,37 +185,8 @@ func RunEx(fix bool) error {
 		})
 		logx.Info("fixed: cleared stale daemon pid %d", s.Daemon.PID)
 	}
-	// Stale install record repair, but only on a CONFIRMED-absent distro:
-	// wsl.Exists is blind to list errors, and clearing installed on a
-	// transient wsl.exe failure would be exactly the false-positive we
-	// must avoid. Installed lives in state.json (single source of truth);
-	// current_path still lives in config.json and is cleared alongside it.
-	if distroList, lerr := wsl.List(); lerr == nil {
-		found := false
-		for _, d := range distroList {
-			if strings.EqualFold(strings.TrimSpace(d), config.DistroName) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			if c, cerr := userconfig.Load(); cerr == nil {
-				c = c.WithDefaults()
-				if c.CurrentPath != "" {
-					c.CurrentPath = ""
-					_ = userconfig.Save(c)
-					logx.Info("fixed: cleared stale current_path")
-				}
-			}
-			_ = state.WithLock(func(ns *state.State) error {
-				if ns.Installed {
-					ns.Installed = false
-					logx.Info("fixed: cleared stale installed flag")
-				}
-				return nil
-			})
-		}
-	}
+	// Stale install record repair through the shared confirmed-absent gate.
+	_, _ = ReconcileDistro()
 	// Remediation: reinstall/repair a broken in-distro engine.
 	if fix && wsl.Exists(config.DistroName) {
 		if ferr := fixDistro(); ferr != nil {

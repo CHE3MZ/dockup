@@ -76,6 +76,13 @@ that "dockup is already running as a foreground process, ctrl + C it to stop it 
 * dockup doctor ## repair stale state and fix other issues and do other checks and preflight checks
 * dockup version ## print "you're running the latest/dev version." for now.
 
+startup distro verification : before serving anything (foreground, daemon start or the daemon child itself),
+dockup verifies the dockup distro against the wsl list. if the distro is confirmed missing (e.g. removed with
+wsl --unregister outside dockup), dockup clears its installed state and refuses, telling the user to run
+dockup doctor and then dockup setup — it never serves a dead backend. a failed list leaves state untouched
+(a transient wsl.exe failure must never look like an uninstall). if the distro is present but does not answer,
+startup refuses too and points at dockup doctor --fix.
+
 ```
 
 # project structure :
