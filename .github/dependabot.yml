@@ -1,0 +1,20 @@
+# Dependabot keeps our three dependency surfaces fresh:
+# Go modules, GitHub Actions pins, and the docs pip package.
+# Weekly cadence; every PR still goes through the full CI wall.
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "pip"
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3

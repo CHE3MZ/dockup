@@ -1,1 +1,1 @@
-- [ ] add dependabot to the project.
+- [x] add dependabot to the project.
