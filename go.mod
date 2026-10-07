@@ -1,12 +1,12 @@
 module github.com/CHE3MZ/dockup
 
-go 1.24.0
+go 1.26.0
 
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/briandowns/spinner v1.23.2
 	github.com/schollz/progressbar/v3 v3.18.0
-	golang.org/x/sys v0.33.0
+	golang.org/x/sys v0.48.0
 )
 
 require (
