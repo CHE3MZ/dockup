@@ -84,7 +84,8 @@ go run github.com/tc-hib/go-winres@latest make --arch amd64,arm64
 
 ## Docs
 
-This site: `docs/mkdocs.yml` + `docs/docs/`. Build strictly before pushing:
+This site: `docs/mkdocs.yml` + `docs/docs/` (theme vendored in `docs/theme`,
+so plain `pip install mkdocs` is enough). Build strictly before pushing:
 
 ```powershell
 cd docs
