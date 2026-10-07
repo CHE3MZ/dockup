@@ -388,17 +388,21 @@ jobs:
         run: |
           wsl --unregister dockup
           if ($LASTEXITCODE -ne 0) { throw 'unregister failed' }
-          $o = .\dockup.exe daemon start 2>&1
-          if ($LASTEXITCODE -ne 1) { throw "daemon start should refuse, got $LASTEXITCODE" }
-          if (($o -join "`n") -notmatch 'doctor') { throw "should point at doctor: $o" }
           $f = .\dockup.exe 2>&1
           if ($LASTEXITCODE -ne 1) { throw "foreground should refuse, got $LASTEXITCODE" }
-          if (($f -join "`n") -notmatch 'doctor') { throw "should point at doctor: $f" }
+          if (($f -join "`n") -notmatch 'doctor') { throw "foreground should point at doctor: $f" }
           $s = Get-Content "$env:APPDATA\dockup\state.json" -Raw | ConvertFrom-Json
           if ($s.installed -ne $false) { throw 'installed not cleared (state.json)' }
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.current_path) { throw "current_path not cleared: $($c.current_path)" }
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path not retained: $($c.default_path)" }
+          $s.installed = $true
+          $s | ConvertTo-Json -Depth 5 | Set-Content "$env:APPDATA\dockup\state.json"
+          $o = .\dockup.exe daemon start 2>&1
+          if ($LASTEXITCODE -ne 1) { throw "daemon start should refuse, got $LASTEXITCODE" }
+          if (($o -join "`n") -notmatch 'doctor') { throw "daemon should point at doctor: $o" }
+          $s = Get-Content "$env:APPDATA\dockup\state.json" -Raw | ConvertFrom-Json
+          if ($s.installed -ne $false) { throw 'installed not cleared again (state.json)' }
           .\dockup.exe doctor
           if ($LASTEXITCODE -ne 0) { throw 'doctor should pass on cleared state' }
           echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
