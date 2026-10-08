@@ -112,21 +112,6 @@ jobs:
             if ($list -notmatch $d) { throw "$d wrongly removed: [$list]" }
           }
           exit 0
-      - name: probe vhdx compact support (soft, informs prune --compact)
-        run: |
-          wsl --version
-          wsl --terminate dockup-extra1
-          Start-Sleep 3
-          $sizeOf = { param($p) if (Test-Path $p) { (Get-Item $p).Length } else { -1 } }
-          $before = &$sizeOf C:\multi-extra1\ext4.vhdx
-          wsl --manage dockup-extra1 --compact 2>&1
-          if ($LASTEXITCODE -eq 0) {
-            $after = &$sizeOf C:\multi-extra1\ext4.vhdx
-            Write-Output ("COMPACT: supported (vhdx {0} MB -> {1} MB, terminate-scoped, no global shutdown)" -f [math]::Round($before/1MB,1), [math]::Round($after/1MB,1))
-          } else {
-            Write-Output ("COMPACT: unsupported here (exit {0})" -f $LASTEXITCODE)
-          }
-          exit 0
       - name: cleanup neighbors
         if: always()
         run: |

@@ -537,7 +537,7 @@ type interrupter struct {
 // sayDown announces the shutdown exactly once, on a fresh line.
 func (in *interrupter) sayDown() {
 	in.downOnce.Do(func() {
-		fmt.Printf("%s\n", ui.White("shutting down dockup..."))
+		fmt.Printf("%s %s\n", ui.Red("✘"), ui.White("shutting down dockup..."))
 	})
 }
 
