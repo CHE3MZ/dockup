@@ -70,7 +70,7 @@ jobs:
           $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
           "engine: $srv" | Add-Content provenance.txt
           Get-Content provenance.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: dockup-provenance
           path: provenance.txt
