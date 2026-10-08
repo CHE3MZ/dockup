@@ -54,7 +54,9 @@ jobs:
             @('daemon', 'start', '--bogus'),
             @('daemon', 'status', '--bogus'),
             @('setup', '--path'),
+            @('setup', '--path='),
             @('restore', '--path'),
+            @('restore', '--path='),
             @('help', 'ps', 'extra')
           )
           foreach ($c in $cases) {

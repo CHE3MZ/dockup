@@ -10,9 +10,7 @@
 package restore
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -85,12 +83,9 @@ func runFull(o Options) int {
 	if installDir == "" {
 		installDir = userconfig.InstallDir()
 	}
-	if !o.Force {
-		fmt.Printf("%s [y/n]\n", ui.Yellow("Are you sure you want to fully restore dockup? This will uninstall and reinstall the entire distro."))
-		if !readYes() {
-			logx.Info("aborted")
-			return 0
-		}
+	if !o.Force && !ui.Confirm(ui.Yellow("Are you sure you want to fully restore dockup? This will uninstall and reinstall the entire distro.")) {
+		logx.Info("aborted")
+		return 0
 	}
 	return setup.RunEx(setup.Options{Arch: arch, Path: installDir, Cfg: mustConfig()})
 }
@@ -127,12 +122,9 @@ func runLight(force bool) int {
 	}
 	fmt.Printf("%s\n", ui.White("  rewrite wsl.conf, reinstall engine packages, restart services"))
 	fmt.Printf("%s\n", ui.Yellow("  running containers will stop when the daemon restarts"))
-	if !force {
-		fmt.Printf("%s [y/n]\n", ui.White("Are you sure you want to restore dockup? This will reinstall and uninstall some packages and will need an internet connection."))
-		if !readYes() {
-			logx.Info("aborted")
-			return 0
-		}
+	if !force && !ui.Confirm(ui.White("Are you sure you want to restore dockup? This will reinstall and uninstall some packages and will need an internet connection.")) {
+		logx.Info("aborted")
+		return 0
 	}
 	if len(removal) > 0 {
 		logx.Info("removing %d added package(s)...", len(removal))
@@ -169,12 +161,6 @@ func runLight(force bool) int {
 	})
 	logx.Ok("restore complete — images, containers, and volumes are intact")
 	return 0
-}
-func readYes() bool {
-	r := bufio.NewReader(os.Stdin)
-	line, _ := r.ReadString('\n')
-	line = strings.ToLower(strings.TrimSpace(line))
-	return line == "y" || line == "yes"
 }
 
 // triage collects unit status + recent journal for a dead engine so a

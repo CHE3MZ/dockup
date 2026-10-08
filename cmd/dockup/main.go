@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -180,46 +179,67 @@ func run(args []string) int {
 	}
 }
 
+// installFlags are the arch/location flags shared by setup and restore.
+type installFlags struct {
+	amd  bool
+	arm  bool
+	path string
+}
+
+// parseInstallFlags consumes --amd/--arm/--path* from args, returning the
+// rest untouched for per-command flags. cmd names the command for hints.
+func parseInstallFlags(cmd string, args []string) (f installFlags, rest []string, err error) {
+	pathErr := fmt.Errorf("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup %s --help)", cmd)
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--amd":
+			f.amd = true
+		case a == "--arm":
+			f.arm = true
+		case a == "--path":
+			if i+1 >= len(args) {
+				return f, nil, pathErr
+			}
+			i++
+			f.path = args[i]
+		case strings.HasPrefix(a, "--path="):
+			f.path = strings.TrimPrefix(a, "--path=")
+			if f.path == "" {
+				return f, nil, pathErr
+			}
+		default:
+			rest = append(rest, a)
+		}
+	}
+	return f, rest, nil
+}
+
 func cmdSetup(cfg userconfig.Config, args []string) int {
 	if hasHelpFlag(args) {
 		setupHelp()
 		return 0
 	}
-	var amd, arm, dryRun bool
-	var pathFlag string
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--amd":
-			amd = true
-		case a == "--arm":
-			arm = true
-		case a == "--dry-run":
-			dryRun = true
-		case a == "--path":
-			if i+1 >= len(args) {
-				logx.Err("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup setup --help)")
-				return 1
-			}
-			i++
-			pathFlag = args[i]
-		case strings.HasPrefix(a, "--path="):
-			pathFlag = strings.TrimPrefix(a, "--path=")
-			if pathFlag == "" {
-				logx.Err("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup setup --help)")
-				return 1
-			}
-		default:
-			logx.Err("unknown setup flag %q (try dockup setup --help)", a)
-			return 1
-		}
+	f, rest, err := parseInstallFlags("setup", args)
+	if err != nil {
+		logx.ErrFrom(err)
+		return 1
 	}
-	arch, msg := config.NormalizeArch(amd, arm)
+	var dryRun bool
+	for _, a := range rest {
+		if a == "--dry-run" {
+			dryRun = true
+			continue
+		}
+		logx.Err("unknown setup flag %q (try dockup setup --help)", a)
+		return 1
+	}
+	arch, msg := config.NormalizeArch(f.amd, f.arm)
 	if msg != "" {
 		logx.Err("%s", msg)
 		return 1
 	}
-	return setup.RunEx(setup.Options{Arch: arch, Path: pathFlag, DryRun: dryRun, Cfg: cfg})
+	return setup.RunEx(setup.Options{Arch: arch, Path: f.path, DryRun: dryRun, Cfg: cfg})
 }
 
 func usage() {
@@ -238,10 +258,6 @@ func usage() {
   ` + ui.Bold("dockup upgrade") + `             Upgrade the in-distro engine to latest
   ` + ui.Bold("dockup version") + `             Show current version
   ` + ui.Bold("dockup help [command]") + `      Show this help text
- ` + "\n" + ui.LightBlue("Examples:") + `
-   dockup setup
-   docker -H npipe:////./pipe/dockup_engine run --rm hello-world
-   dockup ssh -- journalctl -u docker.service --no-pager -n 30
   ` + "\n" +
 		ui.Gray("Config File: ~/.dockup/config.json") + `
   ` + ui.Gray("Docs: ") + ui.Blue("https://che3mz.github.io/dockup/") + `
@@ -373,51 +389,37 @@ func cmdRestore(args []string) int {
 		restoreHelp()
 		return 0
 	}
-	var full, amd, arm, force bool
-	var pathFlag string
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--full":
+	f, rest, err := parseInstallFlags("restore", args)
+	if err != nil {
+		logx.ErrFrom(err)
+		return 1
+	}
+	var full, force bool
+	for _, a := range rest {
+		switch a {
+		case "--full":
 			full = true
-		case a == "--force", a == "-f":
+		case "--force", "-f":
 			force = true
-		case a == "--amd":
-			amd = true
-		case a == "--arm":
-			arm = true
-		case a == "--path":
-			if i+1 >= len(args) {
-				logx.Err("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup restore --help)")
-				return 1
-			}
-			i++
-			pathFlag = args[i]
-		case strings.HasPrefix(a, "--path="):
-			pathFlag = strings.TrimPrefix(a, "--path=")
-			if pathFlag == "" {
-				logx.Err("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup restore --help)")
-				return 1
-			}
 		default:
 			logx.Err("unknown restore flag %q (try dockup restore --help)", a)
 			return 1
 		}
 	}
-	arch, msg := config.NormalizeArch(amd, arm)
+	arch, msg := config.NormalizeArch(f.amd, f.arm)
 	if msg != "" {
 		logx.Err("%s", msg)
 		return 1
 	}
-	if (pathFlag != "" || amd || arm) && !full {
+	if (f.path != "" || f.amd || f.arm) && !full {
 		logx.Err("--path/--amd/--arm only apply to restore --full")
 		return 1
 	}
 	var archOverride string
-	if amd || arm {
+	if f.amd || f.arm {
 		archOverride = arch
 	}
-	return restore.Run(restore.Options{Full: full, Arch: archOverride, Path: pathFlag, Force: force})
+	return restore.Run(restore.Options{Full: full, Arch: archOverride, Path: f.path, Force: force})
 }
 
 func psHelp() {
@@ -493,10 +495,7 @@ func cmdUpgrade() int {
 		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
 		return 1
 	}
-	fmt.Printf("%s [y/n]\n", ui.White("Upgrade the engine inside the dockup distro to the latest versions? This needs an internet connection."))
-	r := bufio.NewReader(os.Stdin)
-	line, _ := r.ReadString('\n')
-	if l := strings.ToLower(strings.TrimSpace(line)); l != "y" && l != "yes" {
+	if !ui.Confirm(ui.White("Upgrade the engine inside the dockup distro to the latest versions? This needs an internet connection.")) {
 		logx.Info("aborted")
 		return 0
 	}
@@ -523,6 +522,60 @@ func versionHelp() {
 `)
 }
 
+// interrupter arms Ctrl+C handling for one run: the first signal stops the
+// active spinner (if any) so the message lands on a clean line instead of
+// freezing mid-frame, announces once, and cancels; a second signal while
+// teardown is stuck force-exits. One instance per process (a dockup process
+// runs exactly one command).
+type interrupter struct {
+	downOnce sync.Once
+	tripped  atomic.Bool
+	mu       sync.Mutex
+	spinner  *ui.Spinner
+}
+
+// sayDown announces the shutdown exactly once, on a fresh line.
+func (in *interrupter) sayDown() {
+	in.downOnce.Do(func() {
+		fmt.Printf("%s\n", ui.White("shutting down dockup..."))
+	})
+}
+
+// setSpinner registers the currently animating spinner (nil clears it).
+// Stopped/finished spinners are no-ops, so a stale pointer is harmless.
+func (in *interrupter) setSpinner(sp *ui.Spinner) {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	in.spinner = sp
+}
+
+// arm starts watching for interrupts; cancel runs the teardown.
+func (in *interrupter) arm(cancel context.CancelFunc) {
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sig
+		in.tripped.Store(true)
+		in.mu.Lock()
+		sp := in.spinner
+		in.mu.Unlock()
+		if sp != nil {
+			sp.Stop()
+		}
+		in.sayDown()
+		cancel()
+		<-sig
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
+		os.Exit(130)
+	}()
+}
+
+// wasInterrupted reports whether a signal arrived.
+func (in *interrupter) wasInterrupted() bool { return in.tripped.Load() }
+
+// newInterrupter builds an unarmed interrupter.
+func newInterrupter() *interrupter { return &interrupter{} }
+
 // foreground starts the relay inline. Refuses if already running or not setup.
 func foreground(cfg userconfig.Config) int {
 	// Narrate before the slow checks (cold wsl.exe spawns take seconds):
@@ -532,32 +585,10 @@ func foreground(cfg userconfig.Config) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	watchConsoleExit(cancel)
-	// Announced the instant a signal arrives (once-guarded), never after
-	// teardown wins a race with it — so an interruption can no longer pass
-	// without a word. Armed before anything slow: an interrupt during
-	// startup checks or waits exits 130 instead of falling into unrelated
-	// error paths.
-	var downOnce sync.Once
-	sayDown := func() {
-		downOnce.Do(func() {
-			fmt.Printf("%s\n", ui.White("shutting down dockup..."))
-		})
-	}
-	var interrupted atomic.Bool
-	sig := make(chan os.Signal, 2)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sig)
-	// First interrupt stops gracefully; a second one while teardown is
-	// stuck exits immediately, so Ctrl+C always terminates one way or both.
-	go func() {
-		<-sig
-		interrupted.Store(true)
-		sayDown()
-		cancel()
-		<-sig
-		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
-		os.Exit(130)
-	}()
+	// Armed before anything slow: an interrupt during startup checks or
+	// waits exits 130 instead of falling into unrelated error paths.
+	in := newInterrupter()
+	in.arm(cancel)
 	pipe := cfg.EffectivePipe()
 	s, _ := state.Load()
 	if !s.Installed && !wsl.Exists(config.DistroName) {
@@ -576,8 +607,8 @@ func foreground(cfg userconfig.Config) int {
 		}
 		return 1
 	}
-	if interrupted.Load() {
-		sayDown()
+	if in.wasInterrupted() {
+		in.sayDown()
 		return 130
 	}
 	if s.Installed {
@@ -596,8 +627,8 @@ func foreground(cfg userconfig.Config) int {
 		})
 	}()
 	if !relay.WaitAliveOn(pipe, 10*time.Second) {
-		if interrupted.Load() {
-			sayDown()
+		if in.wasInterrupted() {
+			in.sayDown()
 			cancel()
 			return 130
 		}
@@ -625,13 +656,14 @@ func foreground(cfg userconfig.Config) int {
 	// tell the rest of the story.
 	warm := ui.NewSpinner(nil, "warming up the dockup distro...")
 	warm.Start()
+	in.setSpinner(warm)
 	if _, err := wsl.ExecCtx(ctx, config.DistroName, 60*time.Second, "sh", "-c", "echo ok"); err != nil {
 		warm.Stop()
-		if interrupted.Load() {
+		if in.wasInterrupted() {
 			// Interrupted mid-warmup: the watcher already cancelled, the
 			// child is dead, the pipe barely lived. (A bare timeout lands
 			// below instead — that path must refuse, not serve dead air.)
-			sayDown()
+			in.sayDown()
 			return 130
 		}
 		logx.Err("distro \"dockup\" is present but not responding (%v) — run dockup doctor --fix to repair it", err)
@@ -674,23 +706,7 @@ func serveForever(cfg userconfig.Config) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	watchConsoleExit(cancel)
-	sig := make(chan os.Signal, 2)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sig)
-	var downOnce sync.Once
-	sayDown := func() {
-		downOnce.Do(func() {
-			fmt.Printf("%s\n", ui.White("shutting down dockup..."))
-		})
-	}
-	go func() {
-		<-sig
-		sayDown()
-		cancel()
-		<-sig
-		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
-		os.Exit(130)
-	}()
+	newInterrupter().arm(cancel)
 	if err := relay.ServeEx(ctx, config.DistroName, cfg.EffectivePipe(), cfg.UseTCP, cfg.EffectivePort(), recordMirror); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
 		return 1
@@ -822,12 +838,9 @@ func cmdPrune(args []string) int {
 	if volumes {
 		what += ", plus unused volumes (their data is destroyed)"
 	}
-	if !force {
-		fmt.Printf("%s [y/n]\n", ui.White(fmt.Sprintf("Reclaim space inside the dockup distro? This removes %s.", what)))
-		if !readYes() {
-			logx.Info("aborted")
-			return 0
-		}
+	if !force && !ui.Confirm(ui.White(fmt.Sprintf("Reclaim space inside the dockup distro? This removes %s.", what))) {
+		logx.Info("aborted")
+		return 0
 	}
 	if err := docker.Prune(config.DistroName, all, volumes); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: prune failed: %v", err)))
@@ -835,14 +848,6 @@ func cmdPrune(args []string) int {
 	}
 	logx.Ok("prune complete")
 	return 0
-}
-
-// readYes reports whether stdin answers y/yes (used for confirm prompts).
-func readYes() bool {
-	r := bufio.NewReader(os.Stdin)
-	line, _ := r.ReadString('\n')
-	line = strings.ToLower(strings.TrimSpace(line))
-	return line == "y" || line == "yes"
 }
 
 func cmdDaemon(cfg userconfig.Config, args []string) int {

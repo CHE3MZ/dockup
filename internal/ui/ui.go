@@ -6,6 +6,7 @@
 package ui
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -107,6 +108,17 @@ func Success(format string, a ...any) {
 // Hint writes a gray hint line to stdout.
 func Hint(format string, a ...any) {
 	fmt.Printf("%s\n", Gray(fmt.Sprintf(format, a...)))
+}
+
+// Confirm asks a [y/n] question on stdin, returning true only for y/yes.
+// The prompt is printed verbatim plus " [y/n]" (style it before passing).
+// Single choke point for every confirmation so prompts read and parse alike.
+func Confirm(prompt string) bool {
+	fmt.Printf("%s [y/n]\n", prompt)
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
+	line = strings.ToLower(strings.TrimSpace(line))
+	return line == "y" || line == "yes"
 }
 
 // Warn writes a yellow warning line to stderr.

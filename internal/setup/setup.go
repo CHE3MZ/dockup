@@ -31,14 +31,6 @@ type Options struct {
 	Cfg    userconfig.Config
 }
 
-func askYesNo(prompt string) bool {
-	fmt.Printf("%s [y/n]\n", prompt)
-	r := bufio.NewReader(os.Stdin)
-	line, _ := r.ReadString('\n')
-	line = strings.ToLower(strings.TrimSpace(line))
-	return line == "y" || line == "yes"
-}
-
 func askRetryAbort() bool {
 	fmt.Printf("something went wrong , retry or abort ? [retry/abort]\n")
 	r := bufio.NewReader(os.Stdin)
@@ -313,7 +305,7 @@ func sizeOf(url string) string {
 // boot task remains; default_path is kept for the next setup.
 // force skips the confirmation (for scripts).
 func Uninstall(force bool) int {
-	if !force && !askYesNo("Delete the dockup distro and all of its files?") {
+	if !force && !ui.Confirm("Delete the dockup distro and all of its files?") {
 		logx.Info("aborted")
 		return 0
 	}

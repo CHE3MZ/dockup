@@ -46,6 +46,17 @@ func DaemonAlive(s state.State) bool {
 	return processAlive(s.Daemon.PID)
 }
 
+// killQuiet best-effort kills pid (teardown paths; a dead pid means the goal
+// is already met, so failures stay silent).
+func killQuiet(pid int) {
+	if pid == 0 {
+		return
+	}
+	if proc, err := os.FindProcess(pid); err == nil {
+		_ = proc.Kill()
+	}
+}
+
 // Start spawns detached `dockup __serve` and waits for the pipe.
 func Start() error {
 	ucfg, _ := userconfig.Load()
@@ -127,12 +138,8 @@ func Start() error {
 		// and point at repair. The install record stays — the distro exists,
 		// it is just sick, and doctor --fix heals exactly that.
 		_ = state.WithLock(func(s *state.State) error {
-			if s.Daemon.PID != 0 {
-				if proc, perr := os.FindProcess(s.Daemon.PID); perr == nil {
-					_ = proc.Kill()
-				}
-				s.Daemon = state.Daemon{}
-			}
+			killQuiet(s.Daemon.PID)
+			s.Daemon = state.Daemon{}
 			return nil
 		})
 		relay.WaitDeadOn(pipe, 5*time.Second)
@@ -161,11 +168,7 @@ func Stop() error {
 			pid = 0
 			return fmt.Errorf("dockup daemon is not running (stale pid repaired)")
 		}
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			return err
-		}
-		_ = proc.Kill()
+		killQuiet(pid)
 		s.Daemon = state.Daemon{}
 		return nil
 	})

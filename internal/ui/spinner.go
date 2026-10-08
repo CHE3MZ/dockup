@@ -16,11 +16,14 @@ import (
 )
 
 // Spinner tracks one running step. Zero value is useless; use NewSpinner.
+// Start/Done/Stop are safe for concurrent use: an interrupt watcher may stop
+// the animation at the same instant the main flow finishes it.
 type Spinner struct {
 	out      io.Writer
 	text     string
 	lib      *bspinner.Spinner
 	once     sync.Once
+	mu       sync.Mutex
 	started  bool
 	finished bool
 }
@@ -40,14 +43,16 @@ func (s *Spinner) put(format string, a ...any) {
 
 // Start prints the step and begins animating (no-op second call).
 func (s *Spinner) Start() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.once.Do(func() {
 		s.started = true
 		if !Enabled() {
 			s.put("%s\n", White(s.text))
 			return
 		}
-		// Braille dots: the house style. If a console cannot render them it
-		// still advances legibly, and non-terminals get plain lines anyway.
+		// Braille dots: the house style (plain ASCII looked cheap here).
+		// Non-terminals get plain lines regardless of charset.
 		s.lib = bspinner.New(bspinner.CharSets[14], 100*time.Millisecond,
 			bspinner.WithWriter(s.out),
 			bspinner.WithColor("green"),
@@ -58,6 +63,8 @@ func (s *Spinner) Start() {
 
 // Done ends the step as complete.
 func (s *Spinner) Done() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.finished {
 		return
 	}
@@ -74,6 +81,8 @@ func (s *Spinner) Done() {
 
 // Stop ends the step without the done line (caller reports the failure).
 func (s *Spinner) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.finished {
 		return
 	}

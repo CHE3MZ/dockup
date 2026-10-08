@@ -1,6 +1,8 @@
 package unit
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -28,6 +30,43 @@ func TestPaletteCodes(t *testing.T) {
 	}
 	if got := ui.Bold("x"); !strings.Contains(got, "\x1b[1m") {
 		t.Fatalf("bold: got %q", got)
+	}
+}
+
+func TestConfirmParsing(t *testing.T) {
+	prev := ui.Enabled()
+	ui.SetEnabled(false)
+	defer ui.SetEnabled(prev)
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{"y\n", true},
+		{"yes\n", true},
+		{"Y\n", true},
+		{"  yes  \n", true},
+		{"n\n", false},
+		{"no\n", false},
+		{"\n", false},
+		{"retry\n", false},
+	} {
+		p := filepath.Join(dir, "in.txt")
+		if err := os.WriteFile(p, []byte(tc.in), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		f, err := os.Open(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := os.Stdin
+		os.Stdin = f
+		got := ui.Confirm("sure?")
+		os.Stdin = old
+		_ = f.Close()
+		if got != tc.want {
+			t.Fatalf("input %q: got %v want %v", tc.in, got, tc.want)
+		}
 	}
 }
 
