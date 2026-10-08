@@ -145,10 +145,10 @@ func NormalizePath(s string) (string, error) {
 	p = strings.Trim(p, `"'`)
 	p = strings.TrimSpace(p)
 	if p == "" {
-		return "", fmt.Errorf("empty path (e.g. D:/WSL)")
+		return "", fmt.Errorf("empty path (e.g. D:/WSL/Dockup)")
 	}
 	if !filepath.IsAbs(p) && !filepath.IsAbs(filepath.FromSlash(p)) {
-		return "", fmt.Errorf("path %q is not absolute (e.g. D:/WSL)", s)
+		return "", fmt.Errorf("path %q is not absolute (e.g. D:/WSL/Dockup)", s)
 	}
 	return filepath.ToSlash(filepath.Clean(filepath.FromSlash(p))), nil
 }

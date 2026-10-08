@@ -23,7 +23,7 @@ dockup setup
 ```
 
 By default, setup asks two things: **where** to install the distro (any absolute path,
-e.g. `D:/WSL` — empty input keeps the shown default, which is whatever you
+e.g. `D:/WSL/Dockup` — empty input keeps the shown default, which is whatever you
 used last; `--path` skips this), and confirms before touching anything:
 
 ```text

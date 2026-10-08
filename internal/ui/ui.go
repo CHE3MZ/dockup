@@ -95,16 +95,6 @@ func Printf(format string, a ...any) {
 	fmt.Printf("%s\n", White(fmt.Sprintf(format, a...)))
 }
 
-// PrintBold writes bold text to stdout.
-func PrintBold(format string, a ...any) {
-	fmt.Printf("%s\n", Bold(fmt.Sprintf(format, a...)))
-}
-
-// Success writes a green success line to stdout.
-func Success(format string, a ...any) {
-	fmt.Printf("%s\n", Green(fmt.Sprintf(format, a...)))
-}
-
 // Hint writes a gray hint line to stdout.
 func Hint(format string, a ...any) {
 	fmt.Printf("%s\n", Gray(fmt.Sprintf(format, a...)))
@@ -124,9 +114,4 @@ func Confirm(prompt string) bool {
 // Warn writes a yellow warning line to stderr.
 func Warn(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "%s\n", Yellow("warning: "+fmt.Sprintf(format, a...)))
-}
-
-// Error writes a red error line to stderr.
-func Error(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "%s\n", Red("dockup: "+fmt.Sprintf(format, a...)))
 }

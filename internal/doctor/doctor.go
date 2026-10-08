@@ -217,14 +217,14 @@ func RunEx(fix bool) error {
 	// systemd PID 1?
 	if wsl.Exists(config.DistroName) && wsl.IsRunning(config.DistroName) {
 		if out, err := wsl.Exec(config.DistroName, 15*time.Second, "sh", "-c", "ps -p 1 -o comm="); err == nil {
-			if contains(string(out), "systemd") {
+			if strings.Contains(string(out), "systemd") {
 				ok("systemd is PID 1")
 			} else {
-				bad("systemd is PID 1", "got "+trim(string(out))+" — reinstall via dockup setup")
+				bad("systemd is PID 1", "got "+strings.Trim(string(out), " \n\r\t\x00")+" — reinstall via dockup setup")
 			}
 		}
 		// docker socket?
-		if out, err := wsl.Exec(config.DistroName, 15*time.Second, "sh", "-c", "test -S /var/run/docker.sock && echo ok"); err == nil && contains(string(out), "ok") {
+		if out, err := wsl.Exec(config.DistroName, 15*time.Second, "sh", "-c", "test -S /var/run/docker.sock && echo ok"); err == nil && strings.Contains(string(out), "ok") {
 			ok("docker socket present")
 		} else {
 			logx.Info("info: docker socket absent (distro stopped or docker down)")
@@ -315,27 +315,4 @@ func fixDistro() error {
 	}
 	logx.Ok("fix: engine restored and answering")
 	return nil
-}
-
-func contains(hay, needle string) bool {
-	return len(hay) >= len(needle) && (func() bool {
-		for i := 0; i+len(needle) <= len(hay); i++ {
-			if hay[i:i+len(needle)] == needle {
-				return true
-			}
-		}
-		return false
-	})()
-}
-
-func trim(s string) string {
-	i := 0
-	for i < len(s) && (s[i] == ' ' || s[i] == '\n' || s[i] == '\r' || s[i] == '\t' || s[i] == 0) {
-		i++
-	}
-	j := len(s)
-	for j > i && (s[j-1] == ' ' || s[j-1] == '\n' || s[j-1] == '\r' || s[j-1] == '\t' || s[j-1] == 0) {
-		j--
-	}
-	return s[i:j]
 }

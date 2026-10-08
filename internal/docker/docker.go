@@ -136,11 +136,10 @@ func PruneScript(all, volumes bool) string {
 }
 
 // Prune reclaims distro disk space (a dynamic VHDX only grows otherwise).
+// Errors come back raw like Install/Upgrade so callers prefix once.
 func Prune(distro string, all, volumes bool) error {
-	if _, err := wsl.ExecScript(distro, 10*time.Minute, PruneScript(all, volumes)); err != nil {
-		return fmt.Errorf("prune: %w", err)
-	}
-	return nil
+	_, err := wsl.ExecScript(distro, 10*time.Minute, PruneScript(all, volumes))
+	return err
 }
 
 // EnginePackages is the dockup-managed set: always reinstalled by repair,

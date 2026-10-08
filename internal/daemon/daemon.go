@@ -78,7 +78,6 @@ func Start() error {
 			return fmt.Errorf("distro \"dockup\" is missing from WSL — it may have been removed outside dockup (run dockup doctor, then dockup setup to reinstall)")
 		}
 	}
-	var startErr error
 	err := state.WithLock(func(s *state.State) error {
 		if !s.Installed {
 			return fmt.Errorf("dockup has not been setup yet run \"dockup setup\" to set it up")
@@ -123,8 +122,7 @@ func Start() error {
 			s.Daemon = state.Daemon{}
 			return nil
 		})
-		startErr = fmt.Errorf("helper failed to come up (pipe %s never answered)", pipe)
-		return startErr
+		return fmt.Errorf("helper failed to come up (pipe %s never answered)", pipe)
 	}
 	// Eager boot: see foreground — same honesty trade, same warn-and-serve
 	// failure mode. Daemon startups in CI do this in well under a second
@@ -149,8 +147,8 @@ func Start() error {
 	}
 	s, _ := state.Load()
 	logx.Ok("dockup started (daemon pid %d, pipe %s)", s.Daemon.PID, pipe)
-	if ucfg.WithDefaults().UseTCP {
-		logx.Info("tcp bridge on %s", ucfg.WithDefaults().TCPAddr())
+	if ucfg.UseTCP {
+		logx.Info("tcp bridge on %s", ucfg.TCPAddr())
 	}
 	return nil
 }

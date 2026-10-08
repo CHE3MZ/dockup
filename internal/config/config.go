@@ -59,12 +59,6 @@ func ArchTarName(arch string) string {
 	return "rootfs-amd64-bookworm.tar.gz"
 }
 
-// DebianURL kept for backward-compat; returns the primary rootfs URL.
-func DebianURL(arch string) string { return RootfsURL(arch) }
-
-// FallbackURL kept for backward-compat; returns the legacy rootfs URL.
-func FallbackURL(arch string) string { return RootfsFallbackURL(arch) }
-
 // NormalizeArch maps user flags to debian arch names.
 // Empty means default (amd64). Returns error string empty on success.
 func NormalizeArch(amdf, armf bool) (arch string, errMsg string) {

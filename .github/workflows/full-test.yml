@@ -402,6 +402,14 @@ jobs:
           if (!$imgs) { throw 'hello-world image lost (data not preserved)' }
           Remove-Item restore-out1.txt, restore-err1.txt
           exit 0
+      - name: restore --force skips confirmation
+        timeout-minutes: 10
+        run: |
+          .\dockup.exe restore --force
+          if ($LASTEXITCODE -ne 0) { throw "restore --force failed with $LASTEXITCODE" }
+          $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
+          if (!$srv) { throw 'engine dead after forced restore' }
+          exit 0
       - name: daemon stop
         run: .\dockup.exe daemon stop
       - name: external unregister is detected, state cleared

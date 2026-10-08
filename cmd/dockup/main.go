@@ -189,7 +189,7 @@ type installFlags struct {
 // parseInstallFlags consumes --amd/--arm/--path* from args, returning the
 // rest untouched for per-command flags. cmd names the command for hints.
 func parseInstallFlags(cmd string, args []string) (f installFlags, rest []string, err error) {
-	pathErr := fmt.Errorf("flag --path needs a value, e.g. --path=\"D:/WSL\" (try dockup %s --help)", cmd)
+	pathErr := fmt.Errorf("flag --path needs a value, e.g. --path=\"D:/WSL/Dockup\" (try dockup %s --help)", cmd)
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
@@ -305,7 +305,7 @@ func setupHelp() {
 
 ` + ui.LightBlue("Options:") + `
   ` + ui.Bold("--amd, --arm") + `    Debian architecture (default: --amd)
-  ` + ui.Bold("--path=DIR") + `      Install here instead of asking, e.g. --path="D:/WSL".
+  ` + ui.Bold("--path=DIR") + `      Install here instead of asking, e.g. --path="D:/WSL/Dockup".
                    The folder you give becomes the new default.
   ` + ui.Bold("--dry-run") + `       Show what setup would do, without changing anything.
   ` + ui.Bold("-h, --help") + `      Show this help.
@@ -432,11 +432,13 @@ func psHelp() {
   STATUS is ` + ui.Green("running") + ` (engine answering), ` + ui.White("starting...") + `
   (bridge up, engine still booting) or ` + ui.White("stopped") + `.
   AUTOSTART is ` + ui.Cyan("on") + ` or ` + ui.Cyan("off") + `, INSTALLED is ` + ui.Cyan("yes") + ` or ` + ui.Cyan("no") + `,
-  SIZE is the distro's disk use, MEMORY its live RAM use (both from
-  ~/.dockup/config.json state and live probes).
+  SIZE is the distro's disk use, MEMORY its live RAM use (install record
+  plus live probes).
 
 ` + ui.LightBlue("Usage:") + `
-  dockup ps
+  dockup ps [--json]
+
+  ` + ui.Bold("--json, -j") + `   Machine-readable output for scripts.
 `)
 }
 

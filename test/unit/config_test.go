@@ -28,13 +28,6 @@ func TestDebianURLs(t *testing.T) {
 	if !strings.Contains(f, "dist-arm64v8") {
 		t.Fatalf("fallback url = %q", f)
 	}
-	// Compat wrappers follow the same sources.
-	if config.DebianURL("amd64") != u {
-		t.Fatalf("DebianURL compat mismatch")
-	}
-	if config.FallbackURL("arm64") != f {
-		t.Fatalf("FallbackURL compat mismatch")
-	}
 }
 
 func TestNormalizeArch(t *testing.T) {

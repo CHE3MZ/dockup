@@ -128,8 +128,11 @@ func RunEx(o Options) int {
 
 	installDir, err := askInstallPath(cfg, o.Path)
 	if err != nil {
+		// Pure input validation: return without touching config, so a typo
+		// can't wipe a still-valid current_path. (On the reinstall path the
+		// old distro is already gone; doctor repairs that residue by design.)
 		logx.Err("%v", err)
-		return fail()
+		return 1
 	}
 
 	url := config.RootfsURL(arch)

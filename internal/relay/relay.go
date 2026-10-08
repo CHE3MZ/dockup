@@ -28,7 +28,7 @@ import (
 	"github.com/Microsoft/go-winio"
 )
 
-// PipeName re-exports the default pipe.
+// PipeName re-exports the default pipe for callers inside this package.
 const PipeName = config.PipeName
 
 // DefaultDockerPipe is Docker Desktop's conventional pipe. dockup serves it

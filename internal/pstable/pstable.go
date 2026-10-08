@@ -95,13 +95,6 @@ func RenderRow(r Row) string {
 	return b.String()
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // RenderJSON renders the row as indented JSON for scripts (ps --json).
 func RenderJSON(r Row) (string, error) {
 	data, err := json.MarshalIndent(struct {
