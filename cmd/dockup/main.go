@@ -681,7 +681,7 @@ func foreground(cfg userconfig.Config) int {
 	}
 	cancel()
 	_ = relay.WaitDeadOn(pipe, 5*time.Second)
-	fmt.Printf("%s %s\n", ui.Blue("●"), ui.White("dockup stopped successfully!"))
+	fmt.Printf("%s %s\n", ui.Green("•"), ui.White("dockup stopped successfully!"))
 	// Reaching teardown with a clean relay means ctx was cancelled, and only
 	// the interrupt watcher cancels it — so this exit was user-requested.
 	return 130
