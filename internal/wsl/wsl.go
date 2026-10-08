@@ -85,8 +85,13 @@ func List() ([]string, error) {
 	return ParseListOutput(out), nil
 }
 
-// Exists reports whether a distro is installed.
+// Exists reports whether a distro is installed. It prefers the WSL API
+// (no process spawn); only when the API is unavailable does it fall back to
+// parsing `wsl --list`.
 func Exists(name string) bool {
+	if registered, err := IsRegistered(name); err == nil {
+		return registered
+	}
 	list, err := List()
 	if err != nil {
 		return false

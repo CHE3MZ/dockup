@@ -9,7 +9,7 @@ shutdown, doctor, upgrade, version, help, hidden `__serve`).
 | `config` | Constants (`dockup` distro, pipe name, rootfs URLs); `Version` var for ldflags stamping; Windows path helpers |
 | `state` | `%APPDATA%\dockup\state.json` (`installed/arch/setupAt/daemon/snapshot`) + file lock |
 | `userconfig` | `~/.dockup/config.json` (paths, port, TCP, pipe, color, autostart) + validation |
-| `wsl` | `wsl.exe` wrappers, UTF-16 decode, quoteless `Exec` vs stdin-script `ExecScript`, retries, import/unregister/terminate |
+| `wsl` | `wsl.exe` wrappers, UTF-16 decode, quoteless `Exec` vs stdin-script `ExecScript`, retries, import/unregister/terminate, `WslIsDistributionRegistered` fast path |
 | `download` | Progress fetch with 30-min timeout, HEAD size probes |
 | `docker` | In-distro scripts: install / configure / upgrade / repair / test / wait, engine package set |
 | `setup` | Full setup flow (+ `--path`/`--dry-run`), uninstall |

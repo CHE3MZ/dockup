@@ -81,15 +81,32 @@ func ParseWslMemory(data string) (uint64, bool) {
 // (and the record was cleared); startup gates in foreground, daemon Start,
 // and __serve share this so all three agree on what "installed" means.
 func ReconcileDistro() (present bool, err error) {
-	distroList, err := wsl.List()
-	if err != nil {
-		return true, err
-	}
-	for _, d := range distroList {
-		if strings.EqualFold(strings.TrimSpace(d), config.DistroName) {
+	// Fast path first: the API answer is definitive (no spawn, no parse).
+	// Only a failed API falls through to the list below.
+	if registered, aerr := wsl.IsRegistered(config.DistroName); aerr == nil {
+		if registered {
 			return true, nil
 		}
+		clearInstallRecord()
+		return false, nil
 	}
+	if distroList, lerr := wsl.List(); lerr == nil {
+		for _, d := range distroList {
+			if strings.EqualFold(strings.TrimSpace(d), config.DistroName) {
+				return true, nil
+			}
+		}
+		clearInstallRecord()
+		return false, nil
+	} else {
+		err = lerr
+	}
+	return true, err
+}
+
+// clearInstallRecord drops the install record after confirmed absence:
+// state installed=false plus config current_path cleared.
+func clearInstallRecord() {
 	if c, cerr := userconfig.Load(); cerr == nil {
 		c = c.WithDefaults()
 		if c.CurrentPath != "" {
@@ -105,7 +122,6 @@ func ReconcileDistro() (present bool, err error) {
 		}
 		return nil
 	})
-	return false, nil
 }
 
 // RunEx is the doctor entry point: checks everything, repairs stale state,

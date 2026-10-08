@@ -2,6 +2,7 @@ package unit
 
 import (
 	"encoding/binary"
+	"runtime"
 	"testing"
 	"unicode/utf16"
 
@@ -35,5 +36,21 @@ func TestParseListUTF8(t *testing.T) {
 func TestParseListEmpty(t *testing.T) {
 	if got := wsl.ParseListOutput([]byte("")); len(got) != 0 {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestExistsMissingDistro(t *testing.T) {
+	if wsl.Exists("definitely-not-a-distro-xyz") {
+		t.Fatal("missing distro reported present")
+	}
+}
+
+func TestIsRegisteredMissingDistro(t *testing.T) {
+	registered, err := wsl.IsRegistered("definitely-not-a-distro-xyz")
+	if registered {
+		t.Fatal("missing distro reported registered")
+	}
+	if runtime.GOOS != "windows" && err == nil {
+		t.Fatal("expected an error off Windows (no WSL API)")
 	}
 }
