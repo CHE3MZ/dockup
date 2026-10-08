@@ -92,7 +92,7 @@ func TestSpinnerNonInteractiveLines(t *testing.T) {
 	if strings.Contains(out, "\r") {
 		t.Fatalf("non-interactive spinner must not use carriage returns: %q", out)
 	}
-	if !strings.Contains(out, "working\n") || !strings.Contains(out, "working done\n") {
+	if !strings.Contains(out, "working\n") || !strings.Contains(out, "working done!\n") {
 		t.Fatalf("want start + done lines, got %q", out)
 	}
 }

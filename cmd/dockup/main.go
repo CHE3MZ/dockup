@@ -674,14 +674,14 @@ func foreground(cfg userconfig.Config) int {
 	if cfg.UseTCP {
 		fmt.Printf("%s\n", ui.White(fmt.Sprintf("tcp bridge on %s", cfg.TCPAddr())))
 	}
-	fmt.Printf("%s\n", ui.White("Running in the foreground — press Ctrl+C to stop."))
+	fmt.Printf("%s %s\n", ui.White("Running in the foreground!"), ui.Gray("press Ctrl+C to stop."))
 	if err := <-errCh; err != nil {
 		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: helper failed: %v", err)))
 		return 1
 	}
 	cancel()
 	_ = relay.WaitDeadOn(pipe, 5*time.Second)
-	fmt.Printf("%s\n", ui.White("dockup stopped successfully"))
+	fmt.Printf("%s %s\n", ui.Blue("●"), ui.White("dockup stopped successfully!"))
 	// Reaching teardown with a clean relay means ctx was cancelled, and only
 	// the interrupt watcher cancels it — so this exit was user-requested.
 	return 130

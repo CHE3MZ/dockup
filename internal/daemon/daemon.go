@@ -178,7 +178,7 @@ func Stop() error {
 	if pid != 0 {
 		ucfg2, _ := userconfig.Load()
 		relay.WaitDeadOn(ucfg2.WithDefaults().EffectivePipe(), 10*time.Second)
-		logx.Ok("dockup stopped successfully")
+		fmt.Printf("%s %s\n", ui.Blue("●"), ui.White("dockup stopped successfully!"))
 	}
 	return nil
 }

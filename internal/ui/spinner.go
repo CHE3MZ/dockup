@@ -61,6 +61,12 @@ func (s *Spinner) Start() {
 	})
 }
 
+// doneLine renders the completion line: green check, plain step text,
+// gray done!
+func (s *Spinner) doneLine() string {
+	return Green("✓") + " " + White(s.text) + " " + Gray("done!")
+}
+
 // Done ends the step as complete.
 func (s *Spinner) Done() {
 	s.mu.Lock()
@@ -70,12 +76,12 @@ func (s *Spinner) Done() {
 	}
 	s.finished = true
 	if s.lib != nil {
-		s.lib.FinalMSG = White("✓ "+s.text+" done") + "\n"
+		s.lib.FinalMSG = s.doneLine() + "\n"
 		s.lib.Stop()
 		return
 	}
 	if s.started {
-		s.put("%s\n", White("✓ "+s.text+" done"))
+		s.put("%s\n", s.doneLine())
 	}
 }
 
