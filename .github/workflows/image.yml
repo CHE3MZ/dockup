@@ -1,13 +1,20 @@
 name: image
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish to the rolling image-latest release
+        description: Publish the built images
         required: false
         type: boolean
         default: true
+      tag:
+        description: Existing release tag to attach images to (empty = rolling image-latest)
+        required: false
+        type: string
   schedule:
     - cron: "0 4 * * 1"
 
@@ -139,7 +146,7 @@ jobs:
   publish:
     name: publish
     needs: [build, smoke]
-    if: github.ref == 'refs/heads/main' && github.event.inputs.publish != 'false'
+    if: github.event_name != 'workflow_dispatch' || (inputs.publish && (inputs.tag || github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -152,6 +159,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: resolve release tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="$INPUT_TAG"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: list assets
         run: ls -lh dist
@@ -169,20 +188,35 @@ jobs:
               -sig "dist/dockup-$arch.tar.gz.sig"
           done
 
-      - name: publish rolling release
+      - name: publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
-          tag=image-latest
-          notes="Rolling prebuilt WSL images. Assets are replaced on every run."
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" --notes "$notes"
+          if [[ -n "$TAG" ]]; then
+            for _ in $(seq 1 120); do
+              if gh release view "$TAG" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 5
+            done
+            if ! gh release view "$TAG" >/dev/null 2>&1; then
+              echo "release $TAG was not created by the release workflow" >&2
+              exit 1
+            fi
+            gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$tag" \
-              --target "${{ github.sha }}" \
-              --title "Dockup WSL image" \
-              --notes "$notes" \
-              --latest=false
+            tag=image-latest
+            notes="Rolling prebuilt WSL images. Assets are replaced on every run."
+            if gh release view "$tag" >/dev/null 2>&1; then
+              gh release edit "$tag" --notes "$notes"
+            else
+              gh release create "$tag" \
+                --target "${{ github.sha }}" \
+                --title "Dockup WSL image" \
+                --notes "$notes" \
+                --latest=false
+            fi
+            gh release upload "$tag" dist/* --clobber
           fi
-          gh release upload "$tag" dist/* --clobber
