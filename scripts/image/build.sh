@@ -80,7 +80,7 @@ fi
 echo "==> installing base packages"
 chroot "$ROOT" "${APT[@]}" update
 chroot "$ROOT" "${APT[@]}" install -y --no-install-recommends \
-  ca-certificates curl gnupg procps iproute2
+  ca-certificates curl gnupg procps iproute2 systemd systemd-sysv
 
 echo "==> installing docker"
 install -d -m 0755 "$ROOT/etc/apt/keyrings"
@@ -94,6 +94,11 @@ chroot "$ROOT" "${APT[@]}" install -y --no-install-recommends \
   docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin socat
 
 echo "==> configuring systemd"
+if [[ ! -x "$ROOT/usr/lib/systemd/systemd" || ! -e "$ROOT/usr/sbin/init" ]]; then
+  echo "systemd is missing from the rootfs" >&2
+  exit 1
+fi
+chroot "$ROOT" systemctl --version
 printf '[boot]\nsystemd=true\n' > "$ROOT/etc/wsl.conf"
 systemctl --root="$ROOT" enable containerd.service docker.service docker.socket
 
