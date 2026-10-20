@@ -10,5 +10,5 @@ jobs:
   cirrus:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: cirruslabs/cirrus-action@ac5191d18a9bff05ff1a38f280f2b6d768e32153 # master, pinned
