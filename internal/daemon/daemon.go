@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,7 +25,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// processAlive checks a PID via OpenProcess.
+// processAlive checks that pid is running the same image as this binary.
+// The name check matters: a stale PID saved before a crash can be reused by
+// an unrelated process, and Stop/shutdown must never kill that process.
 func processAlive(pid int) bool {
 	if pid <= 0 || uint64(pid) > uint64(math.MaxUint32) {
 		return false
@@ -35,10 +38,20 @@ func processAlive(pid int) bool {
 	}
 	defer func() { _ = windows.CloseHandle(h) }()
 	var code uint32
-	if err := windows.GetExitCodeProcess(h, &code); err != nil {
+	if err := windows.GetExitCodeProcess(h, &code); err != nil || code != 259 { // STILL_ACTIVE
 		return false
 	}
-	return code == 259 // STILL_ACTIVE
+	self, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	buf := make([]uint16, windows.MAX_LONG_PATH)
+	size := uint32(len(buf))
+	if err := windows.QueryFullProcessImageName(h, 0, &buf[0], &size); err != nil {
+		return false
+	}
+	running := filepath.Base(windows.UTF16ToString(buf[:size]))
+	return strings.EqualFold(running, filepath.Base(self))
 }
 
 // DaemonAlive reports whether the recorded daemon process is up.
