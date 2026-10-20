@@ -40,18 +40,33 @@ jobs:
           cache: true
 
       - name: verify tag
+        id: tag
         env:
           EXPECTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           actual="$(git describe --tags --exact-match)"
           test "$actual" = "$EXPECTED_TAG"
+          prev="$(git describe --tags --abbrev=0 "${EXPECTED_TAG}^" 2>/dev/null || true)"
+          if [ -n "$prev" ]; then
+            echo "range=${prev}..${EXPECTED_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "range=${EXPECTED_TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: release notes
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
+        with:
+          config: cliff.toml
+          args: ${{ steps.tag.outputs.range }} --strip all --output RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: ${{ inputs.dry_run && 'release --snapshot --clean' || 'release --clean' }}
+          args: ${{ inputs.dry_run && 'release --snapshot --clean' || 'release --clean' }} --release-notes=RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

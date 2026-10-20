@@ -35,12 +35,19 @@ tasks:
     cmds:
       - cmd: lychee .
   cliff:
-    desc: Run git cliff
+    desc: Preview release notes for unreleased commits.
     silent: true
     env:
       RUST_LOG: off
     cmds:
       - git-cliff --unreleased --strip all
+  release-notes:
+    desc: Render the latest tag's release notes into RELEASE_NOTES.md.
+    silent: true
+    env:
+      RUST_LOG: off
+    cmds:
+      - git-cliff --latest --strip all --output RELEASE_NOTES.md
   scan:
     desc: Run other ops tools on the repo.
     cmds:

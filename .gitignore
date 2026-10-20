@@ -10,6 +10,7 @@ dist/
 /ref/
 /temp/
 /tmp/
+/RELEASE_NOTES.md
 
 # logs
 logs/

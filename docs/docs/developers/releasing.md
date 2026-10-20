@@ -25,6 +25,20 @@ does not exist, so it cannot silently publish an image-only release.
 The rolling `image-latest` release still exists for weekly rebuilds; versioned
 releases are the immutable reference.
 
+## Release notes
+
+Notes come from `cliff.toml` via git-cliff. `release.yml` renders the commits
+in the tag's range, then hands the file to GoReleaser with `--release-notes`.
+The prebuilt-image footer is added by the `release` section of
+`.goreleaser.yaml`.
+
+Preview them locally:
+
+```powershell
+task cliff           # unreleased commits
+task release-notes   # latest tag, writes RELEASE_NOTES.md
+```
+
 ## Cutting a release
 
 From a clean `main` with all workflows green:
@@ -74,5 +88,6 @@ go run ./scripts/image/imgtool verify \
   -sig dockup-amd64.tar.gz.sig
 ```
 
-`dockup version` prints the tag in release builds (local builds keep the short
-commit SHA).
+`dockup version` prints the tag in release builds and `go install` builds. Local
+`go build` builds print the short commit SHA (with `-dirty` when the tree has
+uncommitted changes).

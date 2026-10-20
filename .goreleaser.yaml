@@ -31,13 +31,8 @@ archives:
 checksum:
   name_template: dockup_checksums.txt
 
-changelog:
-  sort: asc
-  filters:
-    exclude:
-      - '^(build|chore|ci|docs|style|test)(\(.+\))?:'
-      - "^Merge pull request"
-      - "^Merge branch"
+# Release notes come from git-cliff (see release.yml), passed to goreleaser
+# with --release-notes.
 
 release:
   github:
@@ -45,8 +40,6 @@ release:
     name: dockup
   mode: keep-existing
   prerelease: auto
-  header: |
-    ## Dockup {{ .Tag }}
   footer: |
     ### Prebuilt WSL image
 
