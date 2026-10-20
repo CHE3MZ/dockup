@@ -35,11 +35,7 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^ci:"
-      - "^chore:"
-      - "^style:"
+      - '^(build|chore|ci|docs|style|test)(\(.+\))?:'
       - "^Merge pull request"
       - "^Merge branch"
 
