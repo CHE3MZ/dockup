@@ -57,7 +57,8 @@ go run ./scripts/image/imgtool keygen
 ```
 
 Store the printed `seed=` as the `DOCKUP_IMAGE_SIGNING_KEY` repository secret
-and keep the `pub=` value for the client to embed. CI signs the checksum file:
+and keep the `pub=` value for the client to embed. The current public key lives
+in `scripts/image/pubkey.txt`. CI signs the checksum file:
 
 ```text
 dockup-amd64.tar.gz.sha256  ->  dockup-amd64.tar.gz.sig
