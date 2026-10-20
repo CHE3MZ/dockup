@@ -15,7 +15,7 @@ jobs:
       has_wsl: ${{ steps.probe.outputs.has_wsl }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.24'
       - name: probe WSL presence
@@ -58,7 +58,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.24'
       - name: build (arm64 native)
