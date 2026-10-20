@@ -38,6 +38,10 @@ containers
 - **Debian rootfs, not nocloud.** The cloud `disk.raw` tarballs fail
   `wsl --import`; the debuerreotype rootfs tarballs (same bookworm content)
   import cleanly.
+- **Prebuilt image (in progress).** `scripts/image/` builds bookworm with the
+  engine already installed, `/etc/wsl.conf` set, and units enabled, then signs
+  the checksum. CI smoke-tests the import on `windows-latest`. Setup still
+  uses the live rootfs until the client-side download/verify/import lands.
 - **Single source of truth.** `installed` lives only in
   `%APPDATA%\dockup\state.json` (locked read-modify-write);
   `~/.dockup/config.json` holds user intent only. Old config files carrying

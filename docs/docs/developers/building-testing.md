@@ -53,6 +53,7 @@ gh workflow run <name> [-f full-setup=true]
 | `inspect-wsl` | Distro audit, provenance manifest, upgrade, break → `doctor --fix`, `--full`, reinstall reproducibility |
 | `multi-distro` | Neighbor distros untouched; shutdown → `starting...` → self-heal; scoped uninstall |
 | `arm-test` | arm64 vet/unit/build always; `--arm` install gated on a WSL probe (arm images currently lack WSL) |
+| `image` | Prebuilt WSL rootfs: amd64+arm64 build, signed checksums, import + hello-world smoke, rolling `image-latest` release (weekly) |
 
 ## PowerShell-in-CI pitfalls (learned the hard way)
 
