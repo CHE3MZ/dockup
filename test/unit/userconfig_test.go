@@ -93,10 +93,10 @@ func TestLoadMissingReturnsDefaults(t *testing.T) {
 
 func TestLoadCorruptErrors(t *testing.T) {
 	withTempHome(t)
-	if err := os.MkdirAll(userconfig.Dir(), 0o755); err != nil {
+	if err := os.MkdirAll(userconfig.Dir(), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(userconfig.File(), []byte("{nope"), 0o644); err != nil {
+	if err := os.WriteFile(userconfig.File(), []byte("{nope"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := userconfig.Load(); err == nil {

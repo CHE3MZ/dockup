@@ -55,7 +55,7 @@ func TestConfirmParsing(t *testing.T) {
 		if err := os.WriteFile(p, []byte(tc.in), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		f, err := os.Open(p)
+		f, err := os.Open(p) // #nosec G304 -- test fixture path
 		if err != nil {
 			t.Fatal(err)
 		}

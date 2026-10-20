@@ -2,6 +2,7 @@
 // schollz/progressbar. It renders only when styled output is enabled;
 // piped output and CI logs stay silent (completion is announced by the
 // caller's own lines, e.g. the downloaded summary).
+
 package ui
 
 import (

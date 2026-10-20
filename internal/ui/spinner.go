@@ -3,6 +3,7 @@
 // briandowns/spinner: interactive terminals get a live braille animation,
 // while piped output and CI logs degrade to two plain lines (start + done)
 // so logs stay grep-able.
+
 package ui
 
 import (
