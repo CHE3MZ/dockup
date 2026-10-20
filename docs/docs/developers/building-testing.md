@@ -24,8 +24,9 @@ Version stamping (as CI does it):
 go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
 ```
 
-Local unstamped builds report `dev`; release builds are stamped with the `v*`
-tag by GoReleaser (see [Releasing](releasing.md)). Or build both arches at once:
+Unstamped builds fall back to the module version (`go install`) or the short
+commit SHA (`go build`); release builds are stamped with the `v*` tag by
+GoReleaser (see [Releasing](releasing.md)). Or build both arches at once:
 
 ```powershell
 .\scripts\build.ps1   # → dist/dockup-windows-amd64.exe + dist/dockup-windows-arm64.exe (stamped, gitignored)

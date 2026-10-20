@@ -40,10 +40,12 @@ const (
 )
 
 var (
-	// Version is stamped at build time via -ldflags -X (release tag or commit SHA).
-	// Local builds without flags report "dev".
+	// Version is stamped at build time via -ldflags -X (release tag). Without
+	// a stamp it falls back to the module version, then the VCS revision.
 	Version = "dev"
 )
+
+func init() { Version = resolveVersion(Version) }
 
 // DistBranch maps amd64/arm64 to debuerreotype branch names.
 func DistBranch(arch string) string {
@@ -104,16 +106,17 @@ func LogDir() string { return filepath.Join(AppDataDir(), "logs") }
 // LogFile is the daemon log.
 func LogFile() string { return filepath.Join(LogDir(), "dockup.log") }
 
-// ImageTag is the image release matching this binary. Release builds use
-// their own v* tag (images are attached to the same release); dev and CI
-// builds use the rolling image-latest release. DOCKUP_IMAGE_TAG overrides
-// it for tests and manual pinning.
+// ImageTag is the image release matching this binary. Release builds and
+// `go install pkg@version` use their own v* tag (images are attached to the
+// same release); dev, CI, and pseudo-version builds use the rolling
+// image-latest release. DOCKUP_IMAGE_TAG overrides it for tests and manual
+// pinning.
 func ImageTag() string {
 	if v := strings.TrimSpace(os.Getenv("DOCKUP_IMAGE_TAG")); v != "" {
 		return v
 	}
-	if strings.HasPrefix(strings.TrimSpace(Version), "v") {
-		return strings.TrimSpace(Version)
+	if v := strings.TrimSpace(Version); imageReleaseTag.MatchString(v) {
+		return v
 	}
 	return ImageLatestTag
 }

@@ -106,6 +106,18 @@ func TestImageTag(t *testing.T) {
 	if got := config.ImageTag(); got != "v1.2.3" {
 		t.Fatalf("release tag = %q", got)
 	}
+	config.Version = "v1.3.0-rc1"
+	if got := config.ImageTag(); got != "v1.3.0-rc1" {
+		t.Fatalf("prerelease tag = %q", got)
+	}
+	config.Version = "v1.2.2-0.20261020155638-f53f85ea879b+dirty"
+	if got := config.ImageTag(); got != config.ImageLatestTag {
+		t.Fatalf("pseudo-version tag = %q", got)
+	}
+	config.Version = "f53f85e-dirty"
+	if got := config.ImageTag(); got != config.ImageLatestTag {
+		t.Fatalf("commit tag = %q", got)
+	}
 	config.Version = "dev"
 	if got := config.ImageTag(); got != config.ImageLatestTag {
 		t.Fatalf("dev tag = %q", got)
