@@ -1,8 +1,8 @@
 # Prebuilt WSL Image
 
-Status: the build and release pipeline is in place. `dockup setup` still
-downloads the official Debian rootfs and installs Docker itself; the client
-will switch once the image has proven itself in CI.
+Status: the build, sign, smoke, and publish pipeline is green. `dockup setup`
+still downloads the official Debian rootfs and installs Docker itself; the
+client switch is the next step.
 
 ## Why
 
@@ -16,7 +16,7 @@ download and `wsl --import`.
 - Debian 12 (`bookworm`) `minbase`
 - `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-buildx-plugin`,
   `docker-compose-plugin`, `socat`
-- `ca-certificates`, `curl`, `gnupg`, `procps`, `iproute2`
+- `ca-certificates`, `curl`, `gnupg`, `procps`, `iproute2`, `systemd`, `systemd-sysv`
 - `/etc/wsl.conf` with `[boot] systemd=true`
 - `containerd.service`, `docker.service`, and `docker.socket` enabled
 - `/etc/dockup-image` with the build id, arch, suite, and engine versions
@@ -84,7 +84,9 @@ and on manual dispatch:
 - `build` — rootfs, checksum, signature, artifacts
 - `smoke` — imports the amd64 tarball on `windows-latest`, checks that systemd
   is PID 1, waits for dockerd, runs `hello-world`, then unregisters
-- `publish` — replaces the assets on the `image-latest` rolling release
+- `publish` — checks each tarball against its `.sha256` and verifies both
+  signatures with `scripts/image/pubkey.txt`, then replaces the assets on the
+  `image-latest` rolling release
 
 `image-latest` is explicitly not marked latest, so the repository's normal
 release links keep pointing at the `dockup` binary releases.
@@ -103,6 +105,8 @@ do not ship `wsl.exe` yet (see `arm-test.yml`).
 ## Security
 
 - Verify the signature before importing; never after.
+- Rotate the signing seed only together with `scripts/image/pubkey.txt`; publish
+  fails if a signature does not verify with the committed key.
 - Keep the build script and workflow public so the artifact is reproducible.
 - Rebuild on a schedule, otherwise the baked engine goes stale.
 - Keep the from-source path as the escape hatch if an image is broken or a
