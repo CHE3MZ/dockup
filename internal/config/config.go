@@ -28,7 +28,7 @@ const (
 )
 
 var (
-	// Version is stamped at build time via -ldflags -X (commit SHA).
+	// Version is stamped at build time via -ldflags -X (release tag or commit SHA).
 	// Local builds without flags report "dev".
 	Version = "dev"
 )
