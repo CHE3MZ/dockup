@@ -7,11 +7,23 @@ package pstable
 
 import (
 	"encoding/json"
-	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/CHE3MZ/dockup/internal/ui"
 )
+
+var ansi = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func visibleLen(s string) int { return len(ansi.ReplaceAllString(s, "")) }
+
+// pad aligns a value by its visible width, so color codes do not skew columns.
+func pad(s string, width int) string {
+	if n := visibleLen(s); n < width {
+		return s + strings.Repeat(" ", width-n)
+	}
+	return s
+}
 
 const (
 	StatusRunning  = "running"
@@ -82,17 +94,17 @@ func RenderRow(r Row) string {
 	values := []string{coloredStatus(r.Status), r.Autostart, r.Installed, r.Size, r.Memory}
 	widths := make([]int, len(headers))
 	for i := range headers {
-		widths[i] = max(len(headers[i]), len(values[i])) + 4
+		widths[i] = max(len(headers[i]), visibleLen(values[i])) + 4
 	}
 	var b strings.Builder
 	for i, h := range headers {
-		b.WriteString(ui.Bold(fmt.Sprintf("%-*s", widths[i], h)))
+		b.WriteString(pad(ui.Bold(h), widths[i]))
 	}
 	b.WriteString("\n")
 	for i, v := range values {
-		_, _ = fmt.Fprintf(&b, "%-*s", widths[i], v)
+		b.WriteString(pad(v, widths[i]))
 	}
-	return b.String()
+	return strings.TrimRight(b.String(), " ")
 }
 
 // RenderJSON renders the row as indented JSON for scripts (ps --json).

@@ -1,12 +1,15 @@
 package unit
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/CHE3MZ/dockup/internal/pstable"
 	"github.com/CHE3MZ/dockup/internal/ui"
 )
+
+var ansi = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func TestClassify(t *testing.T) {
 	cases := []struct {
@@ -60,6 +63,23 @@ func TestRenderTable(t *testing.T) {
 	// Values must be plain (non-bold): one bold sequence per header.
 	if n := strings.Count(out, "\x1b[1m"); n != 5 {
 		t.Fatalf("expected 5 bold headers, got %d: %q", n, out)
+	}
+	// Color codes must not skew the columns.
+	lines := strings.Split(ansi.ReplaceAllString(out, ""), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected header and row, got %q", out)
+	}
+	row := lines[1]
+	for _, pair := range [][2]string{
+		{"STATUS", "starting..."},
+		{"AUTOSTART", "on"},
+		{"INSTALLED", "yes"},
+		{"SIZE", "452 MB"},
+		{"MEMORY", "128 MB"},
+	} {
+		if got, want := strings.Index(row, pair[1]), strings.Index(lines[0], pair[0]); got != want {
+			t.Fatalf("column %s starts at %d, want %d: %q", pair[0], got, want, out)
+		}
 	}
 }
 
