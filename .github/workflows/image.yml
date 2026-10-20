@@ -149,8 +149,25 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
       - name: list assets
         run: ls -lh dist
+
+      - name: verify artifacts
+        run: |
+          set -euo pipefail
+          pub=$(tr -d '[:space:]' < scripts/image/pubkey.txt)
+          for arch in amd64 arm64; do
+            ( cd dist && sha256sum -c "dockup-$arch.tar.gz.sha256" )
+            test -f "dist/dockup-$arch.tar.gz.sig"
+            go run ./scripts/image/imgtool verify \
+              -pub "$pub" \
+              -in "dist/dockup-$arch.tar.gz.sha256" \
+              -sig "dist/dockup-$arch.tar.gz.sig"
+          done
 
       - name: publish rolling release
         env:
