@@ -81,7 +81,7 @@ func runFull(o Options) int {
 	}
 	installDir := o.Path
 	if installDir == "" {
-		installDir = userconfig.InstallDir()
+		installDir = userconfig.InstallRoot()
 	}
 	if !o.Force && !ui.Confirm(ui.Yellow("Are you sure you want to fully restore dockup? This will uninstall and reinstall the entire distro.")) {
 		logx.Info("aborted")

@@ -36,15 +36,16 @@ Or run in the foreground with `dockup` (Ctrl+C stops it).
 | Command | What it does |
 |---|---|
 | `dockup` | Foreground run, logs inline, Ctrl+C stops |
-| `dockup setup [--amd\|--arm] [--path=DIR] [--dry-run]` | Install the distro, Docker, systemd config; verify |
-| `dockup uninstall` | Remove the distro and its state (keeps your default path) |
+| `dockup setup [--amd\|--arm] [--path=DIR] [--dry-run]` | Download, verify, and import the signed image (source fallback); verify |
+| `dockup uninstall` | Remove the distro data (keeps the cached image and default path) |
+| `dockup prune [--all] [--volumes] [--keep-image]` | Reclaim in-distro space and delete the cached image |
 | `dockup restore [--full]` | Reset tampering (light) or reinstall from scratch (`--full`) |
 | `dockup ps` | `STATUS` (`running`/`starting...`/`stopped`) + `AUTOSTART` table |
 | `dockup daemon start\|stop\|restart\|status\|log` | Background process management + log follow |
 | `dockup daemon autostart [on\|off]` | Show or set starting at Windows login (default off) |
 | `dockup shutdown` | Stop everything and terminate the distro |
 | `dockup doctor [--fix]` | Health checks; `--fix` reinstalls/repairs a broken engine |
-| `dockup upgrade` | Update the in-distro engine to the latest versions |
+| `dockup upgrade` (alias `update`) | Update the in-distro engine to the latest versions; refresh the cached image |
 | `dockup version` | Show the version |
 | `dockup help [command]` | Help (`-h`/`--help` work on every command) |
 

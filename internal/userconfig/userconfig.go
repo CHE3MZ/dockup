@@ -3,8 +3,8 @@
 // not here: config.json holds only user intent (paths, ports, styling).
 //
 //	{
-//	  "default_path": "D:/WSL",
-//	  "current_path": "D:/WSL",
+//	  "default_path": "D:/WSL/Dockup",
+//	  "current_path": "D:/WSL/Dockup",
 //	  "port": 2375,
 //	  "use_tcp": false,
 //	  "pipe_name": "\\\\.\\pipe\\dockup_engine",
@@ -12,11 +12,11 @@
 //	  "autostart": false
 //	}
 //
-// default_path is the prefilled install location for the next `dockup setup`
+// default_path is the prefilled install root for the next `dockup setup`
 // (updated to whatever path was used on every successful setup).
-// current_path is where the installed distro actually lives; dockup reads it
-// to find the distro directory. port/use_tcp control the optional
-// 127.0.0.1 TCP bridge (named pipe is always served).
+// current_path is where the installed distro actually lives. The root holds
+// distro\ (the WSL import target) and cache\ (the verified setup image).
+// port/use_tcp control the optional 127.0.0.1 TCP bridge.
 package userconfig
 
 import (
@@ -64,7 +64,7 @@ func File() string { return filepath.Join(Dir(), "config.json") }
 // Defaults returns the bare-minimum config for a fresh machine.
 func Defaults() Config {
 	return Config{
-		DefaultPath: filepath.ToSlash(config.WslInstallDir()),
+		DefaultPath: filepath.ToSlash(config.DefaultInstallRoot()),
 		CurrentPath: "",
 		Port:        DefaultPort,
 		UseTCP:      false,
@@ -153,7 +153,7 @@ func NormalizePath(s string) (string, error) {
 	return filepath.ToSlash(filepath.Clean(filepath.FromSlash(p))), nil
 }
 
-// ResolveInstallDir picks the setup target directory: --path wins, otherwise
+// ResolveInstallDir picks the setup install root: --path wins, otherwise
 // the stored default_path. Returns the OS-native path.
 func ResolveInstallDir(flagPath string, cfg Config) (string, error) {
 	if strings.TrimSpace(flagPath) != "" {
@@ -186,17 +186,43 @@ func (c Config) EffectivePort() int {
 	return DefaultPort
 }
 
-// InstallDir returns where the distro lives: stored current_path,
-// falling back to the legacy default for pre-config installs.
-func InstallDir() string {
+// InstallRoot returns the install root: current_path when installed, then
+// default_path (which survives uninstall so the cache can still be found),
+// then the legacy pre-config location.
+func InstallRoot() string {
 	c, _ := Load()
 	c = c.WithDefaults()
-	if strings.TrimSpace(c.CurrentPath) != "" {
-		if p, err := NormalizePath(c.CurrentPath); err == nil {
+	for _, raw := range []string{c.CurrentPath, c.DefaultPath} {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		if p, err := NormalizePath(raw); err == nil {
 			return filepath.FromSlash(p)
 		}
 	}
 	return config.WslInstallDir()
+}
+
+// DistroDir resolves the actual wsl --import target under root. New installs
+// use root\distro; installs created before the split have ext4.vhdx directly
+// in root and are used in place.
+func DistroDir(root string) string {
+	nested := filepath.Join(root, config.DistroSubdir)
+	if hasVHDX(nested) {
+		return nested
+	}
+	if hasVHDX(root) {
+		return root
+	}
+	return nested
+}
+
+// DistroDirCurrent is DistroDir for the active install.
+func DistroDirCurrent() string { return DistroDir(InstallRoot()) }
+
+func hasVHDX(dir string) bool {
+	st, err := os.Stat(filepath.Join(dir, "ext4.vhdx"))
+	return err == nil && !st.IsDir()
 }
 
 // TCPAddr is the 127.0.0.1-only listen address for the optional TCP bridge.

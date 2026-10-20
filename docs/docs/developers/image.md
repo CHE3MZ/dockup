@@ -1,8 +1,8 @@
 # Prebuilt WSL Image
 
-Status: the build, sign, smoke, and publish pipeline is green. `dockup setup`
-still downloads the official Debian rootfs and installs Docker itself; the
-client switch is the next step.
+Status: the build, sign, smoke, and publish pipeline is green, and the client
+side has landed. `dockup setup` downloads, verifies, caches, and imports this
+image by default, with the from-source flow as an automatic fallback.
 
 ## Why
 
@@ -76,6 +76,30 @@ go run ./scripts/image/imgtool verify \
 The signature is ed25519 over the exact bytes of the `.sha256` file, written
 as base64. Verify the signature first, then the tarball against the checksum.
 
+## Client
+
+`internal/image` owns the download, verification, and cache. `dockup setup`
+calls `image.Ensure`, which:
+
+1. resolves the release tag (`DOCKUP_IMAGE_TAG`, else the binary's `v*` version,
+   else `image-latest`) and asset URLs;
+2. fetches `<asset>.sha256` and `<asset>.sig`, verifies the signature against
+   the embedded public key in `internal/image/pubkey.go`, and parses the SHA256;
+3. if a valid cache entry exists (signature, checksum, tarball, and metadata all
+   match the current tag and arch), reuses it with no download;
+4. otherwise downloads the tarball to a `.part` file, verifies the SHA256, then
+   atomically moves tarball, checksum, and signature into
+   `<install root>\cache\images` and writes `image-<arch>.json` last.
+
+`restore --full` and setup re-import from the cache; `dockup upgrade` refreshes
+it (fetches the remote checksum/signature, downloads only if the release
+changed); `dockup uninstall` keeps it; `dockup prune` deletes it. The cache must
+verify before reuse, so a corrupted file is re-fetched rather than imported.
+
+Base URLs can be overridden for tests, mirrors, or air-gapped setups with
+`DOCKUP_IMAGE_BASE_URL` (default `https://github.com/CHE3MZ/dockup/releases/download`)
+and `DOCKUP_IMAGE_TAG`. Verification against the embedded key is not optional.
+
 ## CI
 
 `.github/workflows/image.yml` builds both arches on every Monday at 04:00 UTC,
@@ -103,9 +127,10 @@ do not ship `wsl.exe` yet (see `arm-test.yml`).
 
 1. Build, sign, and smoke the image in CI (done).
 2. Teach `dockup setup` to download, verify, and import it, with the current
-   from-source flow as an automatic fallback.
-3. Drop runtime apt from setup; keep the install/configure scripts because
-   `doctor`, `restore`, and `upgrade` still use them.
+   from-source flow as an automatic fallback (done - `internal/image` plus the
+   `distro\` and `cache\images\` layout).
+3. Setup no longer runs apt on the happy path; the install/configure scripts
+   stay because the fallback, `doctor`, `restore`, and `upgrade` still use them.
 
 ## Security
 

@@ -55,7 +55,8 @@ jobs:
       - name: arm dry-run shows arm urls
         run: |
           $o = (echo y | .\dockup.exe setup --arm --dry-run) -join "`n"
-          if ($o -notmatch 'dist-arm64v8') { throw "no arm urls: $o" }
+          if ($o -notmatch 'dockup-arm64\.tar\.gz') { throw "no arm image url: $o" }
+          if ($o -notmatch 'dist-arm64v8') { throw "no arm fallback url: $o" }
           $list = wsl --list --quiet
           if ($list -match 'dockup') { throw 'dry-run created a distro' }
           exit 0
@@ -80,6 +81,14 @@ jobs:
           exit 0
       - name: setup with custom path
         run: echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
+      - name: setup uses the image cache and split folders
+        run: |
+          $root = 'C:\dockup-fulltest-wsl'
+          if (!(Test-Path "$root\distro\ext4.vhdx")) { throw 'distro is not in distro\' }
+          foreach ($f in @('dockup-amd64.tar.gz', 'dockup-amd64.tar.gz.sha256', 'dockup-amd64.tar.gz.sig', 'image-amd64.json')) {
+            if (!(Test-Path "$root\cache\images\$f")) { throw "missing cached image file $f" }
+          }
+          exit 0
       - name: config paths follow custom install
         run: |
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
@@ -90,11 +99,15 @@ jobs:
       - name: reinstall over existing distro
         timeout-minutes: 15
         run: |
+          $tar = 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz'
+          $before = (Get-Item $tar).LastWriteTimeUtc
           echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
           $c = Get-Content "$env:USERPROFILE\.dockup\config.json" -Raw | ConvertFrom-Json
           if ($c.current_path -ne 'C:/dockup-fulltest-wsl') { throw "current_path = $($c.current_path)" }
           $s = Get-Content "$env:APPDATA\dockup\state.json" -Raw | ConvertFrom-Json
           if ($s.installed -ne $true) { throw 'installed not set on reinstall (state.json)' }
+          $after = (Get-Item $tar).LastWriteTimeUtc
+          if ($before -ne $after) { throw 'reinstall re-downloaded the image instead of using the cache' }
       - name: diagnose setup failure
         if: failure()
         continue-on-error: true
@@ -350,13 +363,14 @@ jobs:
           if ($j.status -ne 'running') { throw "ps json status = $($j.status)" }
           if ($j.installed -ne 'yes') { throw "ps json installed = $($j.installed)" }
           exit 0
-      - name: prune reclaims without touching tagged images
+      - name: prune reclaims without touching tagged images or the cache
         timeout-minutes: 5
         run: |
-          echo y | .\dockup.exe prune
+          echo y | .\dockup.exe prune --keep-image
           if ($LASTEXITCODE -ne 0) { throw "prune failed with $LASTEXITCODE" }
           $imgs = docker -H npipe:////./pipe/dockup_engine images -q hello-world
           if (!$imgs) { throw 'prune ate the tagged hello-world image' }
+          if (!(Test-Path 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz')) { throw '--keep-image did not keep the cache' }
           exit 0
       - name: upgrade engine to latest
         timeout-minutes: 10
@@ -434,7 +448,12 @@ jobs:
           if ($s.installed -ne $false) { throw 'installed not cleared again (state.json)' }
           .\dockup.exe doctor
           if ($LASTEXITCODE -ne 0) { throw 'doctor should pass on cleared state' }
+          if (!(Test-Path 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz')) { throw 'external unregister removed the image cache' }
+          $tar = 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz'
+          $before = (Get-Item $tar).LastWriteTimeUtc
           echo y | .\dockup.exe setup --amd --path="C:\dockup-fulltest-wsl"
+          $after = (Get-Item $tar).LastWriteTimeUtc
+          if ($before -ne $after) { throw 'setup after external unregister re-downloaded the image' }
           exit 0
       - name: foreground run serves the bridge
         run: |
@@ -497,10 +516,18 @@ jobs:
           $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
           if (Test-Path $lnk) { throw 'startup entry left behind by uninstall' }
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path not retained: $($c.default_path)" }
+          if (!(Test-Path 'C:\dockup-fulltest-wsl\distro')) { throw 'distro folder should be removed' }
+          if (!(Test-Path 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz')) { throw 'uninstall removed the image cache' }
       - name: second uninstall succeeds (idempotent, forced)
         run: |
           .\dockup.exe uninstall --force
           if ($LASTEXITCODE -ne 0) { throw "expected exit 0, got $LASTEXITCODE" }
+          exit 0
+      - name: prune deletes the image cache when no distro exists
+        run: |
+          echo y | .\dockup.exe prune
+          if ($LASTEXITCODE -ne 0) { throw "prune failed with $LASTEXITCODE" }
+          if (Test-Path 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz') { throw 'prune did not delete the image cache' }
           exit 0
       - name: daemon refuses start when nothing installed
         run: |

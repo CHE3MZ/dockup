@@ -1,4 +1,5 @@
-// Package download fetches the Debian nocloud tarball with MB progress.
+// Package download fetches setup artifacts (images, rootfs tarballs) with
+// MB progress.
 package download
 
 import (

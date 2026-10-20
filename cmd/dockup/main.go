@@ -17,6 +17,7 @@ import (
 	"github.com/CHE3MZ/dockup/internal/daemon"
 	"github.com/CHE3MZ/dockup/internal/docker"
 	"github.com/CHE3MZ/dockup/internal/doctor"
+	"github.com/CHE3MZ/dockup/internal/image"
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/pstable"
 	"github.com/CHE3MZ/dockup/internal/relay"
@@ -161,7 +162,7 @@ func run(args []string) int {
 			return 1
 		}
 		return 0
-	case "upgrade":
+	case "upgrade", "update":
 		if hasHelpFlag(args[1:]) {
 			upgradeHelp()
 			return 0
@@ -253,9 +254,9 @@ func usage() {
   ` + ui.Bold("dockup daemon") + `              Start | Stop | Restart | Status
   ` + ui.Bold("dockup shutdown") + `            Stop everything
   ` + ui.Bold("dockup ssh [...]") + `           Open a shell inside the distro
-  ` + ui.Bold("dockup prune [--all]") + `       Reclaim distro disk space
+  ` + ui.Bold("dockup prune [--all]") + `       Reclaim distro disk space and cached images
   ` + ui.Bold("dockup doctor [--fix]") + `      Repair stale states
-  ` + ui.Bold("dockup upgrade") + `             Upgrade the in-distro engine to latest
+  ` + ui.Bold("dockup upgrade") + `             Upgrade the engine and cached setup image
   ` + ui.Bold("dockup version") + `             Show current version
   ` + ui.Bold("dockup help [command]") + `      Show this help text
   ` + "\n" +
@@ -284,7 +285,7 @@ func helpTopic(name string) int {
 		pruneHelp()
 	case "doctor":
 		doctorHelp()
-	case "upgrade":
+	case "upgrade", "update":
 		upgradeHelp()
 	case "version":
 		versionHelp()
@@ -297,29 +298,31 @@ func helpTopic(name string) int {
 
 func setupHelp() {
 	fmt.Print(ui.Header("dockup setup") + `
-  Install Debian into WSL as the ` + ui.Cyan(`"dockup"`) + ` distro, set up
-  the Docker daemon on it, and check that the bridge works.
+  Download the signed prebuilt image, import it into WSL as the
+  ` + ui.Cyan(`"dockup"`) + ` distro, and check that the daemon and bridge work.
 
 ` + ui.LightBlue("Usage:") + `
   dockup setup [--amd|--arm] [--path=DIR] [--dry-run]
 
 ` + ui.LightBlue("Options:") + `
-  ` + ui.Bold("--amd, --arm") + `    Debian architecture (default: --amd)
-  ` + ui.Bold("--path=DIR") + `      Install here instead of asking, e.g. --path="D:/WSL/Dockup".
+  ` + ui.Bold("--amd, --arm") + `    Architecture (default: --amd)
+  ` + ui.Bold("--path=DIR") + `      Install root, e.g. --path="D:/WSL/Dockup".
                    The folder you give becomes the new default.
   ` + ui.Bold("--dry-run") + `       Show what setup would do, without changing anything.
   ` + ui.Bold("-h, --help") + `      Show this help.
 
   Without --path you get asked where to install. An empty answer keeps
-  the shown default. The folder you pick is saved as both
-  ` + ui.Cyan("default_path") + ` (suggested next time) and ` + ui.Cyan("current_path") + ` in
-  ` + ui.Cyan("~/.dockup/config.json") + `.
+  the shown default. The root holds ` + ui.Cyan("distro\\") + ` (the WSL import)
+  and ` + ui.Cyan("cache\\images\\") + ` (the verified setup image); uninstall keeps
+  the cache, and ` + ui.Bold("dockup prune") + ` removes it.
 `)
 }
 
 func uninstallHelp() {
 	fmt.Print(ui.Header("dockup uninstall") + `
-  Delete the dockup distro from WSL and clear its saved state.
+  Delete the dockup distro from WSL and clear its saved state. The
+  cached setup image is kept so a later setup does not download it
+  again; use ` + ui.Bold("dockup prune") + ` to remove it.
 
 ` + ui.LightBlue("Usage:") + `
   dockup uninstall [--force]
@@ -349,13 +352,15 @@ func sshHelp() {
 func pruneHelp() {
 	fmt.Print(ui.Header("dockup prune") + `
   Reclaim distro disk space (a dynamic VHDX only ever grows) by removing
-  unneeded Docker objects inside the distro.
+  unneeded Docker objects, and delete the cached setup image. Works after
+  uninstall too, when only the cache is left.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup prune [--all] [--volumes] [--force]
+  dockup prune [--all] [--volumes] [--keep-image] [--force]
 
   ` + ui.Bold("--all") + `         Also remove all unused images (default: dangling only).
   ` + ui.Bold("--volumes") + `     Also remove unused volumes (destroys their data).
+  ` + ui.Bold("--keep-image") + `  Keep the cached setup image.
   ` + ui.Bold("--force, -f") + `   Skip the confirmation (for scripts).
 `)
 }
@@ -484,20 +489,35 @@ func upgradeHelp() {
 	fmt.Print(ui.Header("dockup upgrade") + `
   Update Docker and its dependencies inside the dockup distro to the
   latest versions, restart its services, and verify the daemon answers.
+  If a cached setup image exists, refresh it when its release changed.
+
+  ` + ui.Bold("update") + ` is an alias for this command.
 
 ` + ui.LightBlue("Usage:") + `
   dockup upgrade
+  dockup update
 `)
 }
 
-// cmdUpgrade upgrades the in-distro engine to latest.
+// cmdUpgrade upgrades the in-distro engine to latest and refreshes an
+// existing cached setup image when the release changed.
 func cmdUpgrade() int {
 	s, _ := state.Load()
 	if !s.Installed && !wsl.Exists(config.DistroName) {
 		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
 		return 1
 	}
-	if !ui.Confirm(ui.White("Upgrade the engine inside the dockup distro to the latest versions? This needs an internet connection.")) {
+	root := userconfig.InstallRoot()
+	arch := s.Arch
+	if arch != "amd64" && arch != "arm64" {
+		arch = "amd64"
+	}
+	cachePresent := image.CacheExists(root)
+	msg := "Upgrade the engine inside the dockup distro to the latest versions? This needs an internet connection."
+	if cachePresent {
+		msg = "Upgrade the engine inside the dockup distro and refresh the cached setup image if it changed? This needs an internet connection."
+	}
+	if !ui.Confirm(ui.White(msg)) {
 		logx.Info("aborted")
 		return 0
 	}
@@ -505,6 +525,29 @@ func cmdUpgrade() int {
 	if err := docker.Upgrade(config.DistroName); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: upgrade failed: %v", err)))
 		return 1
+	}
+	if cachePresent {
+		logx.Info("checking the cached setup image...")
+		var pb *ui.Progress
+		var last int64
+		res, err := image.Ensure(root, arch, true, func(done, total int64) {
+			if pb == nil {
+				pb = ui.NewProgress(total, "refreshing cached image...")
+			}
+			pb.Add(done - last)
+			last = done
+		})
+		if pb != nil {
+			pb.Finish()
+		}
+		switch {
+		case err != nil:
+			logx.Warn("cached setup image not refreshed: %v", err)
+		case res.Cached:
+			logx.Info("cached setup image is up to date")
+		default:
+			logx.Info("cached setup image updated")
+		}
 	}
 	logx.Ok("upgrade complete")
 	return 0
@@ -745,7 +788,7 @@ func cmdPs(cfg userconfig.Config, jsonOut bool) int {
 		Memory:    "-",
 	}
 	if s.Installed {
-		if n, err := sysinfo.DirSize(userconfig.InstallDir()); err == nil {
+		if n, err := sysinfo.DistroSize(userconfig.DistroDirCurrent()); err == nil {
 			row.Size = sysinfo.FormatSize(n)
 		}
 		if alive {
@@ -808,13 +851,15 @@ func cmdSSH(args []string) int {
 	return wsl.Shell(config.DistroName, args...)
 }
 
-// cmdPrune reclaims distro disk space via in-distro docker prune.
+// cmdPrune reclaims distro disk space via in-distro docker prune and, unless
+// --keep-image is set, deletes the cached setup image. It works after
+// uninstall too, when only the cache is left.
 func cmdPrune(args []string) int {
 	if hasHelpFlag(args) {
 		pruneHelp()
 		return 0
 	}
-	var all, volumes, force bool
+	var all, volumes, force, keepImage bool
 	for _, a := range args {
 		switch a {
 		case "--all":
@@ -823,29 +868,65 @@ func cmdPrune(args []string) int {
 			volumes = true
 		case "--force", "-f":
 			force = true
+		case "--keep-image":
+			keepImage = true
 		default:
 			logx.Err("unknown prune flag %q (try dockup prune --help)", a)
 			return 1
 		}
 	}
+	root := userconfig.InstallRoot()
 	s, _ := state.Load()
-	if !s.Installed && !wsl.Exists(config.DistroName) {
+	distroPresent := wsl.Exists(config.DistroName)
+	if s.Installed && !distroPresent {
+		logx.Warn("state says installed but WSL has no dockup distro; skipping the in-distro prune (run dockup doctor)")
+	}
+	cachePresent := image.CacheExists(root)
+	if !distroPresent && !cachePresent {
 		fmt.Fprintln(os.Stderr, ui.Red(`dockup has not been setup yet run "dockup setup" to set it up.`))
 		return 1
 	}
-	what := "stopped containers, unused networks and dangling images"
-	if all {
-		what = "stopped containers, unused networks and all unused images"
+	if !distroPresent && (all || volumes) {
+		logx.Warn("distro is not installed; --all/--volumes have no effect")
 	}
-	if volumes {
-		what += ", plus unused volumes (their data is destroyed)"
+	if !distroPresent && keepImage {
+		logx.Info("nothing to prune (image cache kept)")
+		return 0
 	}
-	if !force && !ui.Confirm(ui.White(fmt.Sprintf("Reclaim space inside the dockup distro? This removes %s.", what))) {
+	var parts []string
+	if distroPresent {
+		dockerWhat := "stopped containers, unused networks and dangling images"
+		if all {
+			dockerWhat = "stopped containers, unused networks and all unused images"
+		}
+		if volumes {
+			dockerWhat += ", plus unused volumes (their data is destroyed)"
+		}
+		parts = append(parts, dockerWhat)
+	}
+	if cachePresent && !keepImage {
+		parts = append(parts, "the cached setup image (setup will download it again)")
+	}
+	what := strings.Join(parts, ", plus ")
+	if !force && !ui.Confirm(ui.White(fmt.Sprintf("Reclaim space? This removes %s.", what))) {
 		logx.Info("aborted")
 		return 0
 	}
-	if err := docker.Prune(config.DistroName, all, volumes); err != nil {
-		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: prune failed: %v", err)))
+	var firstErr error
+	if distroPresent {
+		if err := docker.Prune(config.DistroName, all, volumes); err != nil {
+			firstErr = err
+		}
+	}
+	if cachePresent && !keepImage {
+		if n, err := image.Clear(root); err != nil && firstErr == nil {
+			firstErr = err
+		} else if err == nil && n > 0 {
+			logx.Info("removed cached setup image (%s)", sysinfo.FormatSize(uint64(n)))
+		}
+	}
+	if firstErr != nil {
+		fmt.Fprintln(os.Stderr, ui.Red(fmt.Sprintf("dockup: prune failed: %v", firstErr)))
 		return 1
 	}
 	logx.Ok("prune complete")

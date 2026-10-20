@@ -112,6 +112,12 @@ jobs:
         run: go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
       - name: setup dockup (amd64)
         run: echo y | .\dockup.exe setup --amd
+      - name: setup layout uses distro and cache folders
+        run: |
+          $root = Join-Path $env:LOCALAPPDATA 'dockup'
+          if (!(Test-Path "$root\distro\ext4.vhdx")) { throw 'distro is not in distro\' }
+          if (!(Test-Path "$root\cache\images\dockup-amd64.tar.gz")) { throw 'image cache missing' }
+          exit 0
       - name: diagnose import failure
         if: failure()
         run: |

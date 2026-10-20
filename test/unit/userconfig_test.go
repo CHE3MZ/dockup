@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/userconfig"
 )
 
@@ -212,5 +213,53 @@ func TestLegacyInstalledKeyIgnored(t *testing.T) {
 	}
 	if strings.Contains(string(raw), `"installed"`) {
 		t.Fatalf("Save should drop the legacy installed key: %s", raw)
+	}
+}
+
+func TestDefaultsUseInstallRoot(t *testing.T) {
+	withTempHome(t)
+	if got := userconfig.Defaults().DefaultPath; got != filepath.ToSlash(config.DefaultInstallRoot()) {
+		t.Fatalf("default_path = %q", got)
+	}
+}
+
+func TestDistroDirNewAndLegacy(t *testing.T) {
+	root := t.TempDir()
+	if got := userconfig.DistroDir(root); got != filepath.Join(root, config.DistroSubdir) {
+		t.Fatalf("new distro dir = %q", got)
+	}
+	newDir := filepath.Join(root, config.DistroSubdir)
+	if err := os.MkdirAll(newDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(newDir, "ext4.vhdx"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := userconfig.DistroDir(root); got != newDir {
+		t.Fatalf("nested distro dir = %q", got)
+	}
+
+	legacy := t.TempDir()
+	if err := os.WriteFile(filepath.Join(legacy, "ext4.vhdx"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := userconfig.DistroDir(legacy); got != legacy {
+		t.Fatalf("legacy distro dir = %q", got)
+	}
+}
+
+func TestInstallRootFallsBackToDefault(t *testing.T) {
+	withTempHome(t)
+	cfg, err := userconfig.Ensure()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.CurrentPath = ""
+	cfg.DefaultPath = "Z:/WSL/Dockup"
+	if err := userconfig.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := userconfig.InstallRoot(); filepath.ToSlash(got) != "Z:/WSL/Dockup" {
+		t.Fatalf("install root = %q", got)
 	}
 }

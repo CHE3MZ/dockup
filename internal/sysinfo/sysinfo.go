@@ -42,6 +42,15 @@ func DirSize(dir string) (uint64, error) {
 	return total, err
 }
 
+// DistroSize reports the WSL disk size and ignores a sibling image cache for
+// legacy installs, whose ext4.vhdx lives directly in the install root.
+func DistroSize(dir string) (uint64, error) {
+	if st, err := os.Stat(filepath.Join(dir, "ext4.vhdx")); err == nil && !st.IsDir() {
+		return uint64(st.Size()), nil
+	}
+	return DirSize(dir)
+}
+
 // dockupProc is one tasklist row for our own binary.
 type dockupProc struct {
 	pid int

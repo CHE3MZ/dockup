@@ -15,6 +15,7 @@ import (
 	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/docker"
 	"github.com/CHE3MZ/dockup/internal/download"
+	"github.com/CHE3MZ/dockup/internal/image"
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
 	"github.com/CHE3MZ/dockup/internal/state"
@@ -107,7 +108,12 @@ func RunEx(o Options) int {
 			return 0
 		}
 		if o.DryRun {
-			return dryRunPlan(arch, cfg, "<existing distro would be unregistered>")
+			root, rerr := userconfig.ResolveInstallDir(o.Path, cfg)
+			if rerr != nil {
+				root = filepath.FromSlash(cfg.DefaultPath)
+			}
+			ui.Printf("existing distro: %s would be unregistered", config.DistroName)
+			return dryRunPlan(arch, cfg, root)
 		}
 		logx.Info("removing old dockup distro...")
 		_ = wsl.Unregister(config.DistroName)
@@ -135,54 +141,87 @@ func RunEx(o Options) int {
 		return 1
 	}
 
+	if o.DryRun {
+		return dryRunPlan(arch, cfg, installDir)
+	}
+
+	// 1. Resolve the rootfs. The signed prebuilt image is the primary path;
+	// the old Debian-download + in-distro apt flow remains as a fallback.
+	distroDir := filepath.Join(installDir, config.DistroSubdir)
 	url := config.RootfsURL(arch)
 	fallback := config.RootfsFallbackURL(arch)
 	dest := config.TempTar(arch)
 	fallbackDest := config.TempTarFallback(arch)
+	tarPath := ""
+	imgUsed := false
+	imgCached := false
 
-	if o.DryRun {
-		return dryRunPlan(arch, cfg, installDir)
-	}
-	total := download.Size(url)
-
-	// 1. Download (primary OCI tar.gz, fallback legacy tar.xz).
-	// One themed bar line; completion is announced by the downloaded
-	// summary below, so nothing extra is printed here.
+	var pb *ui.Progress
 	var last int64
-	pb := ui.NewProgress(total, "installing debian...")
-	if err := download.Fetch(url, dest, func(done, _ int64) {
+	imgProgress := func(done, total int64) {
+		if pb == nil {
+			pb = ui.NewProgress(total, "downloading dockup image...")
+		}
 		pb.Add(done - last)
 		last = done
-	}); err != nil {
-		pb.Finish()
-		logx.Err("primary download failed: %v — trying fallback %s", err, fallback)
-		dest = fallbackDest
-		if err2 := download.Fetch(fallback, dest, nil); err2 != nil {
-			logx.Err("download failed: %v", err2)
-			return fail()
-		}
 	}
-	pb.Finish()
+	img, imgErr := image.Ensure(installDir, arch, false, imgProgress)
+	if pb != nil {
+		pb.Finish()
+	}
+	if imgErr == nil {
+		tarPath = img.Tar
+		imgUsed = true
+		imgCached = img.Cached
+		if imgCached {
+			logx.Info("using cached image %s (%d MB)", config.ImageAsset(arch), img.Size/(1024*1024))
+		} else {
+			logx.Info("downloaded %s (%d MB)", config.ImageAsset(arch), img.Size/(1024*1024))
+		}
+	} else {
+		logx.Warn("prebuilt image unavailable: %v", imgErr)
+		logx.Info("falling back to the Debian rootfs and in-distro engine install...")
+		last = 0
+		total := download.Size(url)
+		pb = ui.NewProgress(total, "downloading debian rootfs...")
+		if err := download.Fetch(url, dest, func(done, _ int64) {
+			pb.Add(done - last)
+			last = done
+		}); err != nil {
+			pb.Finish()
+			logx.Err("primary download failed: %v - trying fallback %s", err, fallback)
+			dest = fallbackDest
+			if err2 := download.Fetch(fallback, dest, nil); err2 != nil {
+				logx.Err("download failed: %v", err2)
+				return fail()
+			}
+		}
+		pb.Finish()
+		tarPath = dest
+	}
 
 	// 2. Import. wsl --import reports no progress, so a live elapsed timer
 	// instead of a fake percentage that would sit at 0% for minutes.
 	spImport := ui.NewSpinner(nil, "importing debian into WSL as \"dockup\"...")
 	spImport.Start()
-	if err := os.MkdirAll(installDir, 0o700); err != nil {
+	if err := os.MkdirAll(distroDir, 0o700); err != nil {
 		spImport.Stop()
 		logx.Err("mkdir wsl dir: %v", err)
 		return fail()
 	}
-	if st, err := os.Stat(dest); err == nil {
-		logx.Info("downloaded %s (%d MB) -> %s", config.ArchTarName(arch), st.Size()/(1024*1024), dest)
+	if st, err := os.Stat(tarPath); err == nil {
+		logx.Info("importing %d MB from %s", st.Size()/(1024*1024), tarPath)
 	} else {
 		spImport.Stop()
-		logx.Err("download missing at %s: %v", dest, err)
+		logx.Err("rootfs missing at %s: %v", tarPath, err)
 		return fail()
 	}
-	if err := wsl.Import(config.DistroName, installDir, dest); err != nil {
+	if err := wsl.Import(config.DistroName, distroDir, tarPath); err != nil {
 		spImport.Stop()
 		logx.Err("import failed: %v", err)
+		if imgUsed {
+			logx.Err("if the cached image is suspect, run \"dockup prune\" to discard it and try setup again")
+		}
 		return fail()
 	}
 	spImport.Done()
@@ -201,48 +240,105 @@ func RunEx(o Options) int {
 	spWSL.Done()
 	logx.Info("test results : success")
 
-	// 4. Install docker.
-	spInstall := ui.NewSpinner(nil, "installing docker...")
-	spInstall.Start()
-	if err := docker.Install(config.DistroName); err != nil {
-		spInstall.Stop()
-		logx.Info("test results : failure")
-		logx.Err("%v", err)
-		if askRetryAbort() {
-			return Run(arch)
+	// 4. Engine. The image already contains Docker; source installs do the
+	// full apt flow. If an image engine refuses to start, fall back to the
+	// old install scripts rather than leaving setup half-dead.
+	if imgUsed {
+		spEngine := ui.NewSpinner(nil, "starting docker from the prebuilt image...")
+		spEngine.Start()
+		err := docker.Configure(config.DistroName)
+		if err == nil {
+			err = docker.WaitDaemon(config.DistroName, 90*time.Second)
 		}
-		return fail()
-	}
-	spInstall.Done()
+		if err == nil {
+			spEngine.Done()
+			logx.Info("test results : success")
+		} else {
+			spEngine.Stop()
+			logx.Warn("prebuilt image engine did not start: %v", err)
+			logx.Info("reinstalling engine packages from Docker's apt repo...")
+			spInstall := ui.NewSpinner(nil, "installing docker...")
+			spInstall.Start()
+			if ierr := docker.Install(config.DistroName); ierr != nil {
+				spInstall.Stop()
+				logx.Info("test results : failure")
+				logx.Err("%v", ierr)
+				if askRetryAbort() {
+					return Run(arch)
+				}
+				return fail()
+			}
+			spInstall.Done()
+			spConfigure := ui.NewSpinner(nil, "configuring docker...")
+			spConfigure.Start()
+			if cerr := docker.Configure(config.DistroName); cerr != nil {
+				spConfigure.Stop()
+				logx.Info("test results : failure")
+				logx.Err("%v", cerr)
+				if askRetryAbort() {
+					return Run(arch)
+				}
+				return fail()
+			}
+			spConfigure.Done()
+			spTest := ui.NewSpinner(nil, "testing docker...")
+			spTest.Start()
+			if werr := docker.WaitDaemon(config.DistroName, 90*time.Second); werr != nil {
+				spTest.Stop()
+				logx.Info("test results : failure")
+				logx.Err("%v", werr)
+				if askRetryAbort() {
+					return Run(arch)
+				}
+				return fail()
+			}
+			spTest.Done()
+			logx.Info("test results : success")
+		}
+	} else {
+		// 4. Install docker.
+		spInstall := ui.NewSpinner(nil, "installing docker...")
+		spInstall.Start()
+		if err := docker.Install(config.DistroName); err != nil {
+			spInstall.Stop()
+			logx.Info("test results : failure")
+			logx.Err("%v", err)
+			if askRetryAbort() {
+				return Run(arch)
+			}
+			return fail()
+		}
+		spInstall.Done()
 
-	// 5. Configure.
-	spConfigure := ui.NewSpinner(nil, "configuring docker...")
-	spConfigure.Start()
-	if err := docker.Configure(config.DistroName); err != nil {
-		spConfigure.Stop()
-		logx.Info("test results : failure")
-		logx.Err("%v", err)
-		if askRetryAbort() {
-			return Run(arch)
+		// 5. Configure.
+		spConfigure := ui.NewSpinner(nil, "configuring docker...")
+		spConfigure.Start()
+		if err := docker.Configure(config.DistroName); err != nil {
+			spConfigure.Stop()
+			logx.Info("test results : failure")
+			logx.Err("%v", err)
+			if askRetryAbort() {
+				return Run(arch)
+			}
+			return fail()
 		}
-		return fail()
-	}
-	spConfigure.Done()
+		spConfigure.Done()
 
-	// 6. Test docker.
-	spTest := ui.NewSpinner(nil, "testing docker...")
-	spTest.Start()
-	if err := docker.WaitDaemon(config.DistroName, 90*time.Second); err != nil {
-		spTest.Stop()
-		logx.Info("test results : failure")
-		logx.Err("%v", err)
-		if askRetryAbort() {
-			return Run(arch)
+		// 6. Test docker.
+		spTest := ui.NewSpinner(nil, "testing docker...")
+		spTest.Start()
+		if err := docker.WaitDaemon(config.DistroName, 90*time.Second); err != nil {
+			spTest.Stop()
+			logx.Info("test results : failure")
+			logx.Err("%v", err)
+			if askRetryAbort() {
+				return Run(arch)
+			}
+			return fail()
 		}
-		return fail()
+		spTest.Done()
+		logx.Info("test results : success")
 	}
-	spTest.Done()
-	logx.Info("test results : success")
 
 	// 7. Bridge test (ephemeral relay is implicitly covered by pipe check;
 	// full bridge verified on first foreground/daemon start).
@@ -271,6 +367,9 @@ func RunEx(o Options) int {
 	_ = userconfig.Save(cfg)
 	_ = os.Remove(dest)
 	_ = os.Remove(fallbackDest)
+	if imgUsed {
+		logx.Info("setup image kept at %s (removed by \"dockup prune\")", image.CacheDir(installDir))
+	}
 	logx.Ok("you're all good to go ! run \"dockup\" to start a foreground process or \"dockup daemon start\" to start a background daemon process.")
 	return 0
 }
@@ -280,9 +379,12 @@ func dryRunPlan(arch string, cfg userconfig.Config, installDir string) int {
 	fmt.Print(ui.Header("dockup setup --dry-run") + "\n")
 	ui.Printf("arch: %s", arch)
 	ui.Printf("distro name: %s", config.DistroName)
-	ui.Printf("install dir: %s", installDir)
-	ui.Printf("download: %s (%s)", config.RootfsURL(arch), sizeOf(config.RootfsURL(arch)))
-	ui.Printf("fallback: %s (%s)", config.RootfsFallbackURL(arch), sizeOf(config.RootfsFallbackURL(arch)))
+	ui.Printf("install root: %s", installDir)
+	ui.Printf("distro dir: %s", filepath.Join(installDir, config.DistroSubdir))
+	ui.Printf("image: %s (%s)", config.ImageURL(arch), sizeOf(config.ImageURL(arch)))
+	ui.Printf("image cache: %s", image.CacheDir(installDir))
+	ui.Printf("fallback source: %s (%s)", config.RootfsURL(arch), sizeOf(config.RootfsURL(arch)))
+	ui.Printf("fallback source: %s (%s)", config.RootfsFallbackURL(arch), sizeOf(config.RootfsFallbackURL(arch)))
 	ui.Printf("config: %s", userconfig.File())
 	ui.Printf("pipe: %s", cfg.EffectivePipe())
 	if cfg.UseTCP {
@@ -308,10 +410,12 @@ func sizeOf(url string) string {
 // boot task remains; default_path is kept for the next setup.
 // force skips the confirmation (for scripts).
 func Uninstall(force bool) int {
-	if !force && !ui.Confirm("Delete the dockup distro and all of its files?") {
+	if !force && !ui.Confirm("Delete the dockup distro and all of its files? (the cached setup image is kept)") {
 		logx.Info("aborted")
 		return 0
 	}
+	root := userconfig.InstallRoot()
+	distroDir := userconfig.DistroDir(root)
 	_ = wsl.Terminate(config.DistroName)
 	if wsl.Exists(config.DistroName) {
 		if err := wsl.Unregister(config.DistroName); err != nil {
@@ -325,7 +429,15 @@ func Uninstall(force bool) int {
 		*s = state.State{}
 		return nil
 	})
-	_ = os.RemoveAll(userconfig.InstallDir())
+	if distroDir != root {
+		_ = os.RemoveAll(distroDir)
+	} else {
+		// Legacy install: the VHDX sits directly in the install root, which
+		// also holds cache\. Remove only WSL-owned files.
+		for _, name := range []string{"ext4.vhdx", "rootfs"} {
+			_ = os.Remove(filepath.Join(root, name))
+		}
+	}
 	// Keep default_path for the next setup; everything else goes away,
 	// including login autostart. Installed lives in state.json (cleared
 	// above), not here.
@@ -336,6 +448,9 @@ func Uninstall(force bool) int {
 		_ = userconfig.Save(cfg)
 	}
 	_ = autostart.SetEnabled("", false)
+	if image.CacheExists(root) {
+		logx.Info("cached setup image kept at %s (remove it with \"dockup prune\")", image.CacheDir(root))
+	}
 	logx.Ok("dockup uninstalled")
 	return 0
 }

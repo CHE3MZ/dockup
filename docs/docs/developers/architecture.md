@@ -38,10 +38,18 @@ containers
 - **Debian rootfs, not nocloud.** The cloud `disk.raw` tarballs fail
   `wsl --import`; the debuerreotype rootfs tarballs (same bookworm content)
   import cleanly.
-- **Prebuilt image (in progress).** `scripts/image/` builds bookworm with the
-  engine already installed, `/etc/wsl.conf` set, and units enabled, then signs
-  the checksum. CI smoke-tests the import on `windows-latest`. Setup still
-  uses the live rootfs until the client-side download/verify/import lands.
+- **Prebuilt image.** `scripts/image/` builds bookworm with the engine already
+  installed, `/etc/wsl.conf` set, and units enabled, then signs the checksum
+  with an ed25519 key. CI smoke-tests the import on `windows-latest` and
+  publishes the assets to the release. `internal/image` downloads the signed
+  checksum, verifies the signature against an embedded public key, verifies the
+  tarball SHA256, caches it under `<root>\cache\images`, and imports from there;
+  the from-source rootfs + apt flow remains an automatic fallback.
+- **Install root split.** One user-chosen root holds `distro\` (the
+  `wsl --import` target) and `cache\images\` (the verified image). Uninstall
+  removes `distro\` only, so the cache survives for reinstall; `dockup prune`
+  is the only thing that deletes the cache. Legacy installs kept `ext4.vhdx`
+  directly in the root, which the path helpers still detect.
 - **Single source of truth.** `installed` lives only in
   `%APPDATA%\dockup\state.json` (locked read-modify-write);
   `~/.dockup/config.json` holds user intent only. Old config files carrying

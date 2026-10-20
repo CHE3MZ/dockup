@@ -13,7 +13,10 @@
 | Ctrl+C doesn't stop the foreground | Press it again — the second interrupt forces exit. Or run `dockup shutdown` from another terminal |
 | Corrupt `config.json` | Tolerated (warns, continues with defaults); delete it and any command recreates it |
 | `wsl --version` fails | Update WSL (`wsl --update`); systemd needs a recent Store WSL |
-| Setup download stalls | Needs internet; transient files stay in `%TEMP%` (`dockup-rootfs-*.tar.gz`) for forensics |
+| `prebuilt image unavailable` warning | Setup could not download or verify the image and fell back to the source install - usually a transient network/GitHub issue |
+| Setup download stalls | Needs internet; the image lands under `<root>\cache\images` (`.part` while in flight, removed by `dockup prune`) and source fallback uses `%TEMP%\dockup-rootfs-*.tar.gz` |
+| Image checksum/signature mismatch | Tampered or truncated download - run `dockup prune` to drop the cache, then `dockup setup` again |
+| Setup import fails from a cached image | `dockup prune` discards the cache and retries source; report the release if it keeps failing |
 
 If the engine answers inside WSL (`wsl -d dockup -u root -- docker version`)
 but not through the pipe, check `dockup daemon log` and `dockup doctor` —

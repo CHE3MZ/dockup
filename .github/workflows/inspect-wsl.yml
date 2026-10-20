@@ -125,6 +125,9 @@ jobs:
         timeout-minutes: 15
         run: |
           echo y | .\dockup.exe setup --amd --path="C:\dockup-inspect-wsl"
+          if (!(Test-Path 'C:\dockup-inspect-wsl\distro\ext4.vhdx')) { throw 'distro is not in distro\' }
+          if (!(Test-Path 'C:\dockup-inspect-wsl\cache\images\dockup-amd64.tar.gz')) { throw 'image cache missing after setup' }
+          echo y | .\dockup.exe upgrade
           wsl -d dockup -u root -- dpkg-query -W -f='${Package} ${Version}\n' docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin socat | Set-Content provenance-b.txt
           $srv = wsl -d dockup -u root -- docker version --format '{{.Server.Version}}'
           "engine: $srv" | Add-Content provenance-b.txt
@@ -141,4 +144,5 @@ jobs:
           echo y | .\dockup.exe uninstall
           $list = ((wsl --list --quiet) -join "`n") -replace "`0", ""
           if ($list -match '(?m)^dockup$') { throw 'distro still present' }
+          if (!(Test-Path 'C:\dockup-inspect-wsl\cache\images\dockup-amd64.tar.gz')) { throw 'uninstall removed the image cache' }
           exit 0

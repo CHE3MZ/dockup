@@ -4,11 +4,23 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
 	// DistroName is the only WSL distro dockup manages.
 	DistroName = "dockup"
+
+	// ReleaseBase is the public release host for binaries and images.
+	ReleaseBase = "https://github.com/CHE3MZ/dockup/releases"
+	// ImageLatestTag is the rolling image release used by dev builds.
+	ImageLatestTag = "image-latest"
+	// DistroSubdir holds the WSL import target under the install root.
+	DistroSubdir = "distro"
+	// CacheSubdir holds persistent setup artifacts under the install root.
+	CacheSubdir = "cache"
+	// ImagesSubdir holds cached rootfs images under CacheSubdir.
+	ImagesSubdir = "images"
 	// PipeName is the Windows named pipe docker.exe talks to.
 	// Uses dockup_engine (not docker_engine) to avoid hijacking Docker
 	// Desktop's same-named pipe (GH runners already hold docker_engine).
@@ -92,14 +104,54 @@ func LogDir() string { return filepath.Join(AppDataDir(), "logs") }
 // LogFile is the daemon log.
 func LogFile() string { return filepath.Join(LogDir(), "dockup.log") }
 
-// WslInstallDir is %LOCALAPPDATA%\dockup\wsl (wsl --import target).
-func WslInstallDir() string {
+// ImageTag is the image release matching this binary. Release builds use
+// their own v* tag (images are attached to the same release); dev and CI
+// builds use the rolling image-latest release. DOCKUP_IMAGE_TAG overrides
+// it for tests and manual pinning.
+func ImageTag() string {
+	if v := strings.TrimSpace(os.Getenv("DOCKUP_IMAGE_TAG")); v != "" {
+		return v
+	}
+	if strings.HasPrefix(strings.TrimSpace(Version), "v") {
+		return strings.TrimSpace(Version)
+	}
+	return ImageLatestTag
+}
+
+// ImageAsset is the rootfs asset name for arch.
+func ImageAsset(arch string) string { return "dockup-" + arch + ".tar.gz" }
+
+// ImageBaseURL is the directory containing this build's image assets.
+// DOCKUP_IMAGE_BASE_URL overrides it for tests and mirrors.
+func ImageBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("DOCKUP_IMAGE_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return ReleaseBase + "/download/" + ImageTag()
+}
+
+// ImageURL is the prebuilt rootfs tarball for arch.
+func ImageURL(arch string) string { return ImageBaseURL() + "/" + ImageAsset(arch) }
+
+// ImageChecksumURL is the sha256 file for arch's image.
+func ImageChecksumURL(arch string) string { return ImageURL(arch) + ".sha256" }
+
+// ImageSignatureURL is the ed25519 signature over the checksum file.
+func ImageSignatureURL(arch string) string { return ImageURL(arch) + ".sig" }
+
+// DefaultInstallRoot is %LOCALAPPDATA%\dockup: the install root new setups
+// suggest. The root contains distro\ (WSL) and cache\ (images).
+func DefaultInstallRoot() string {
 	if v := os.Getenv("LOCALAPPDATA"); v != "" {
-		return filepath.Join(v, "dockup", "wsl")
+		return filepath.Join(v, "dockup")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "AppData", "Local", "dockup", "wsl")
+	return filepath.Join(home, "AppData", "Local", "dockup")
 }
+
+// WslInstallDir is the legacy %LOCALAPPDATA%\dockup\wsl import target.
+// It is kept as the fallback for installs that predate config.json.
+func WslInstallDir() string { return filepath.Join(DefaultInstallRoot(), "wsl") }
 
 // TempTar is the transient download path for an arch (primary .tar.gz).
 func TempTar(arch string) string {

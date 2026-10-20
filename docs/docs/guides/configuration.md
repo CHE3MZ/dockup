@@ -16,8 +16,8 @@ First run creates `~/.dockup/config.json`:
 
 | Key | Meaning |
 |---|---|
-| `default_path` | Prefilled install location for the next setup; rewritten to whatever path you used on every successful setup |
-| `current_path` | Where the live distro sits (cleared on uninstall) |
+| `default_path` | Prefilled install root for the next setup (default `%LOCALAPPDATA%\dockup`); rewritten to whatever path you used on every successful setup |
+| `current_path` | Install root of the live distro — holds `distro\` and `cache\images` (cleared on uninstall) |
 | `port` / `use_tcp` | Optional TCP bridge (default off). When on, it listens on `127.0.0.1` only — never LAN-exposed |
 | `pipe_name` | Named pipe to serve (default `\\.\pipe\dockup_engine`) |
 | `color` | Master switch for CLI colors (also auto-off when piped, `NO_COLOR`, `TERM=dumb`, or CI) |
