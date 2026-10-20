@@ -59,4 +59,5 @@ nav:
     - Prebuilt Image: developers/image.md
     - Project Layout: developers/project-layout.md
     - Building & Testing: developers/building-testing.md
+    - Releasing: developers/releasing.md
   - Contributing: contributing.md

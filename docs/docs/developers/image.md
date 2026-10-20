@@ -78,18 +78,23 @@ as base64. Verify the signature first, then the tarball against the checksum.
 
 ## CI
 
-`.github/workflows/image.yml` builds both arches on every Monday at 04:00 UTC
-and on manual dispatch:
+`.github/workflows/image.yml` builds both arches on every Monday at 04:00 UTC,
+on manual dispatch, and on every `v*` tag:
 
 - `build` — rootfs, checksum, signature, artifacts
 - `smoke` — imports the amd64 tarball on `windows-latest`, checks that systemd
   is PID 1, waits for dockerd, runs `hello-world`, then unregisters
 - `publish` — checks each tarball against its `.sha256` and verifies both
-  signatures with `scripts/image/pubkey.txt`, then replaces the assets on the
-  `image-latest` rolling release
+  signatures with `scripts/image/pubkey.txt`. On a `v*` tag it waits for the
+  release created by `release.yml` and attaches the image assets to it;
+  otherwise it replaces the assets on the `image-latest` rolling release
 
-`image-latest` is explicitly not marked latest, so the repository's normal
-release links keep pointing at the `dockup` binary releases.
+Dispatch inputs: `publish` (default true) and `tag` (empty = rolling
+`image-latest`; set it to attach to an existing versioned release).
+
+Versioned releases carry the Windows binaries from GoReleaser plus the image
+assets, and are the immutable reference. `image-latest` is explicitly not
+marked latest, so normal release links keep pointing at the versioned release.
 
 The arm64 artifact is built but not imported in CI: the Windows ARM runners
 do not ship `wsl.exe` yet (see `arm-test.yml`).

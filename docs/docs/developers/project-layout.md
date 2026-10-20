@@ -27,6 +27,7 @@ Supporting tree:
 ```text
 test/unit/        # pure tests: no WSL, no network
 test/e2e/doc.go   # placeholder — real e2e runs in GitHub Actions
+.goreleaser.yaml  # windows binaries, checksums, tag release
 scripts/build.ps1 # windows build · test.ps1 · smoke.ps1 (version/doctor/ps/status, no mutations)
 scripts/ops/      # go-bugcheck.sh (7 lint gates) · go-seccheck.sh (gosec)
 scripts/image/    # build.sh (prebuilt WSL rootfs) · imgtool (ed25519 sign/verify)

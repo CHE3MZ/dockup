@@ -16,7 +16,8 @@ go install github.com/CHE3MZ/dockup/cmd/dockup@latest
 ```
 #### Manually from releases:
 
-* download the binary manually from the [**latest release**](https://github.com/CHE3MZ/dockup/releases/latest).
+* download `dockup-windows-amd64.exe` (or `dockup-windows-arm64.exe`) from the [**latest release**](https://github.com/CHE3MZ/dockup/releases/latest).
+* check it against `dockup_checksums.txt` in the same release.
 * put it in your in a directory that is in your **PATH**, or create a new directory, add it to your **PATH** and put the binary there. *(recommended directories are ~/.local/bin or ~/.local/tools)*
 
 ## Getting Started

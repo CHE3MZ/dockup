@@ -8,6 +8,15 @@
 
 ## Getting dockup.exe
 
+### From a release
+
+Download `dockup-windows-amd64.exe` or `dockup-windows-arm64.exe` from the
+[latest release](https://github.com/CHE3MZ/dockup/releases/latest), verify it
+against `dockup_checksums.txt`, rename it to `dockup.exe`, and put it on your
+`PATH`.
+
+### From source
+
 Build from source (Go 1.24+):
 
 ```powershell

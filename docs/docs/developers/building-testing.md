@@ -24,7 +24,8 @@ Version stamping (as CI does it):
 go build -ldflags "-X github.com/CHE3MZ/dockup/internal/config.Version=$(git rev-parse --short HEAD)" -o dockup.exe ./cmd/dockup
 ```
 
-Local unstamped builds report `dev`. Or build both arches at once:
+Local unstamped builds report `dev`; release builds are stamped with the `v*`
+tag by GoReleaser (see [Releasing](releasing.md)). Or build both arches at once:
 
 ```powershell
 .\scripts\build.ps1   # → dist/dockup-windows-amd64.exe + dist/dockup-windows-arm64.exe (stamped, gitignored)
@@ -53,7 +54,8 @@ gh workflow run <name> [-f full-setup=true]
 | `inspect-wsl` | Distro audit, provenance manifest, upgrade, break → `doctor --fix`, `--full`, reinstall reproducibility |
 | `multi-distro` | Neighbor distros untouched; shutdown → `starting...` → self-heal; scoped uninstall |
 | `arm-test` | arm64 vet/unit/build always; `--arm` install gated on a WSL probe (arm images currently lack WSL) |
-| `image` | Prebuilt WSL rootfs: amd64+arm64 build, signed checksums, import + hello-world smoke, rolling `image-latest` release (weekly) |
+| `release` | GoReleaser Windows binaries + checksums; publishes on `v*` tags (dispatch supports `tag` + `dry_run`) |
+| `image` | Prebuilt WSL rootfs: amd64+arm64 build, signed checksums, import + hello-world smoke; attaches to `v*` releases, rolling `image-latest` weekly |
 
 ## PowerShell-in-CI pitfalls (learned the hard way)
 
