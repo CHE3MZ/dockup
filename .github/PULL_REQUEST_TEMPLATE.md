@@ -4,7 +4,7 @@ Short description of the change.
 
 ## Checklist
 
-- [ ] Host untouched: only `go build` / `go vet` / `gofmt` / `go test` (unit) / lint scripts ran locally — no `setup`/`run`/`daemon`, no WSL changes, no downloads
+- [ ] Host untouched: only `go build` / `go vet` / `gofmt` / `go test` (unit) / lint scripts ran locally; no `setup`/`run`/`daemon`, no WSL changes, no downloads
 - [ ] `git status` / `git diff` reviewed (no stray or parallel edits swept in unnoticed)
 - [ ] Commit message(s) short, in repo style
 - [ ] All workflows green, full logs read (`gh run view <ID> --log`), no blind green/red

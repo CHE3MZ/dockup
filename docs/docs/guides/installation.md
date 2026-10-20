@@ -31,14 +31,14 @@ go build -o dockup.exe ./cmd/dockup
 dockup setup
 ```
 
-By default, setup asks two things: **where** to install dockup (any absolute path,
-e.g. `D:/WSL/Dockup` - empty input keeps the shown default, which is whatever you
-used last; `--path` skips this), and confirms before touching anything:
+Setup asks where to install dockup (any absolute path, e.g. `D:/WSL/Dockup`;
+empty input keeps the shown default, which is whatever you used last, and
+`--path` skips the question), then confirms before touching anything:
 
 ```text
-Setting up dockup :
+Setting up dockup:
     dockup will install and configure a new instance on WSL under the name "dockup"
-    proceed ? [y/n]
+    proceed? [y/n]
 ```
 
 It then downloads the signed prebuilt image for your architecture from the
@@ -50,8 +50,10 @@ and start them. Each stage ends with `test results : success`.
 
 If the image cannot be fetched or verified, setup warns and falls back to the
 older source path: download the official Debian rootfs and install Docker from
-Docker's apt repo inside the distro. If a stage fails you get
-`something went wrong , retry or abort ? [retry/abort]`.
+Docker's apt repo inside the distro. That fallback rootfs is fetched over HTTPS
+only, not signature-checked; prefer the signed image and treat the fallback as
+an escape hatch. If a stage fails you get
+`something went wrong, retry or abort? [retry/abort]`.
 
 The install root defaults to `%LOCALAPPDATA%\dockup`. The cached image is about
 200 MB per architecture and is reused by reinstalls, `restore --full`, and
@@ -60,7 +62,7 @@ The install root defaults to `%LOCALAPPDATA%\dockup`. The cached image is about
 Finishing prints:
 
 ```text
-you're all good to go ! run "dockup" to start a foreground process or "dockup daemon start" to start a background daemon process.
+you're all good to go! run "dockup" to start a foreground process or "dockup daemon start" to start a background daemon process.
 ```
 
 ### Useful flags
@@ -89,7 +91,7 @@ uninstall still recognize that layout, and the next install uses `distro\`.
 If a `dockup` distro already exists, setup asks:
 
 ```text
-Warning : An installation of dockup already exists on WSL, do you wish to delete that installation and let dockup re-install a new dockup instance on WSL ? [y/n]
+Warning: an installation of dockup already exists on WSL. Delete it and let dockup reinstall? [y/n]
 ```
 
 Answering `n` aborts cleanly with exit code 0 and changes nothing. Answering

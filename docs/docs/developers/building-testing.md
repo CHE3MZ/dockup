@@ -36,11 +36,11 @@ tag by GoReleaser (see [Releasing](releasing.md)). Or build both arches at once:
 ```powershell
 git add -A; git commit -m "<short>"; git push
 gh run list --limit 7
-gh run view <ID> --log   # full text — never trust green/red blindly
+gh run view <ID> --log   # full text; never trust green/red blindly
 gh workflow run <name> [-f full-setup=true]
 ```
 
-`git add -A` sweeps parallel uncommitted edits into your commit — always run
+`git add -A` sweeps parallel uncommitted edits into your commit. Always run
 `git status` / `git diff` first and report what rode along.
 
 ## CI map (all on push + dispatch; `ci` also on pull requests)
@@ -63,12 +63,12 @@ gh workflow run <name> [-f full-setup=true]
 - `-match` on arrays returns elements (truthy!): `(cmd) -join "`n"` first.
 - `wsl.exe` emits raw UTF-16LE intermittently: strip NULs before matching; Go side already decodes.
 - Single-element arrays, `echo x |` pipeline stdin closing, `wsl -- <quoted args>`
-  mangling (quoteless one-liners; scripts via stdin in Go) — follow existing patterns.
+  mangling (quoteless one-liners; scripts via stdin in Go); follow existing patterns.
 - `Start-Job` stdin piping is unreliable; prefer main-shell commands with timeouts.
 
 ## Frozen strings
 
-CI greps these verbatim — never reword: the setup banner flow,
+CI greps these verbatim, so never reword: the setup banner flow,
 `dockup has not been setup yet run "dockup setup" to set it up.`,
 `starting...`, `test results :`, `autostart: on/off`,
 `STATUS/AUTOSTART/INSTALLED/SIZE/MEMORY`, `read-only`, `ok: autostart on`,

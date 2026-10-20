@@ -1,4 +1,4 @@
-// Package setup orchestrates `dockup setup` per revision.md.
+// Package setup orchestrates `dockup setup`.
 package setup
 
 import (
@@ -33,7 +33,7 @@ type Options struct {
 }
 
 func askRetryAbort() bool {
-	fmt.Printf("something went wrong , retry or abort ? [retry/abort]\n")
+	fmt.Printf("something went wrong, retry or abort? [retry/abort]\n")
 	r := bufio.NewReader(os.Stdin)
 	line, _ := r.ReadString('\n')
 	line = strings.ToLower(strings.TrimSpace(line))
@@ -99,7 +99,7 @@ func RunEx(o Options) int {
 	}()
 	// Already installed?
 	if wsl.Exists(config.DistroName) {
-		fmt.Printf("%s\n", ui.Yellow("Warning : An installation of dockup already exists on WSL, do you wish to delete that installation and let dockup re-install a new dockup instance on WSL ? [y/n]"))
+		fmt.Printf("%s\n", ui.Yellow("Warning: an installation of dockup already exists on WSL. Delete it and let dockup reinstall? [y/n]"))
 		r := bufio.NewReader(os.Stdin)
 		line, _ := r.ReadString('\n')
 		line = strings.ToLower(strings.TrimSpace(line))
@@ -122,7 +122,7 @@ func RunEx(o Options) int {
 			return nil
 		})
 	} else {
-		fmt.Printf("Setting up dockup :\n    dockup will install and configure a new instance on WSL under the name \"dockup\"\n    proceed ? [y/n]\n")
+		fmt.Printf("Setting up dockup:\n    dockup will install and configure a new instance on WSL under the name \"dockup\"\n    proceed? [y/n]\n")
 		r := bufio.NewReader(os.Stdin)
 		line, _ := r.ReadString('\n')
 		line = strings.ToLower(strings.TrimSpace(line))
@@ -370,7 +370,7 @@ func RunEx(o Options) int {
 	if imgUsed {
 		logx.Info("setup image kept at %s (removed by \"dockup prune\")", image.CacheDir(installDir))
 	}
-	logx.Ok("you're all good to go ! run \"dockup\" to start a foreground process or \"dockup daemon start\" to start a background daemon process.")
+	logx.Ok("you're all good to go! run \"dockup\" to start a foreground process or \"dockup daemon start\" to start a background daemon process.")
 	return 0
 }
 

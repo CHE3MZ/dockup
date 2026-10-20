@@ -6,7 +6,7 @@
 dockup daemon start     # refuses if already running (foreground or daemon)
 dockup daemon stop
 dockup daemon restart
-dockup daemon status    # running (daemon pid ..., pipe ok) / stopped — exit code matches
+dockup daemon status    # running (daemon pid ..., pipe ok) / stopped; exit code matches
 dockup daemon log       # follow the log, read-only, Ctrl+C to exit
 ```
 

@@ -5,9 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. Please paste exact commands and output —
-        and never hand-modify WSL distros to work around an issue without
-        saying so below.
+        Thanks for reporting. Paste exact commands and output, and never
+        hand-modify WSL distros to work around an issue without saying so
+        below.
   - type: input
     id: version
     attributes:

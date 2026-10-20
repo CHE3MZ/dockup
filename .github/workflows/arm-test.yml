@@ -2,6 +2,9 @@ name: arm-test
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: read
+
 jobs:
   # Neither windows-11-arm nor windows-11-vs2026-arm ships WSL (wsl.exe is
   # absent entirely; enabling it needs a reboot CI cannot do), so the

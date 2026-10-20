@@ -2,6 +2,9 @@ name: multi-distro
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: read
+
 jobs:
   multi:
     runs-on: windows-latest

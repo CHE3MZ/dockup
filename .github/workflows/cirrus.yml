@@ -3,9 +3,12 @@ name: cirrus
 on: 
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   cirrus:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: cirruslabs/cirrus-action@master
+    - uses: cirruslabs/cirrus-action@ac5191d18a9bff05ff1a38f280f2b6d768e32153 # master, pinned

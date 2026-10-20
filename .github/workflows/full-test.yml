@@ -2,6 +2,9 @@ name: full-test
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: read
+
 jobs:
   full:
     runs-on: windows-latest
@@ -215,11 +218,11 @@ jobs:
           $vPipe = docker -H npipe:////./pipe/dockup_engine version --format '{{.Server.Version}}'
           if (!$vPipe) { throw 'no server version via dockup_engine pipe' }
           if ($s.daemon.mirror -ne $true) {
-            Write-Output 'mirror not claimed (default pipe held) — nothing to prove'
+            Write-Output 'mirror not claimed (default pipe held); nothing to prove'
             exit 0
           }
           if ($pre -eq 'held') {
-            Write-Output 'WARNING: mirror claimed but pipe pre-existed — soft check only'
+            Write-Output 'WARNING: mirror claimed but pipe pre-existed; soft check only'
             exit 0
           }
           Remove-Item Env:\DOCKER_HOST -ErrorAction SilentlyContinue
@@ -240,6 +243,39 @@ jobs:
           docker compose -f compose.yaml up --abort-on-container-exit
           docker compose -f compose.yaml down
           Remove-Item compose.yaml
+      - name: compose build and named volume via pipe
+        timeout-minutes: 10
+        run: |
+          $env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'
+          $proj = 'dockupcbtest'
+          $build = Join-Path $PWD cbuild
+          New-Item -ItemType Directory -Force $build | Out-Null
+          @('FROM alpine:3.20', 'CMD ["sh","-c","echo compose-build-ok > /data/proof && cat /data/proof"]') | Set-Content "$build\Dockerfile"
+          @('services:', '  built:', '    build: ./cbuild', '    volumes:', '      - data:/data', 'volumes:', '  data:') | Set-Content compose.yaml
+          docker compose -p $proj -f compose.yaml build
+          if ($LASTEXITCODE -ne 0) { throw 'compose build failed' }
+          $o = docker compose -p $proj -f compose.yaml up --abort-on-container-exit 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "compose up failed: $o" }
+          if (($o -join "`n") -notmatch 'compose-build-ok') { throw "named volume did not persist: $o" }
+          docker compose -p $proj -f compose.yaml down
+          $vols = docker volume ls -q --filter "name=${proj}_data"
+          if (!$vols) { throw 'the named volume did not survive compose down' }
+          foreach ($v in $vols) { docker volume rm $v | Out-Null }
+          docker rmi "${proj}-built" 2>&1 | Out-Null
+          Remove-Item compose.yaml, $build -Recurse -Force
+          exit 0
+      - name: bind mount from a Windows path is not visible in the distro
+        timeout-minutes: 5
+        run: |
+          $env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'
+          $dir = Join-Path $PWD bindprobe
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          'hello' | Set-Content "$dir\file.txt"
+          $o = docker run --rm -v "${dir}:/probe" alpine:3.20 cat /probe/file.txt 2>&1
+          Remove-Item $dir -Recurse -Force
+          if (($o -join "`n") -match 'hello') { throw 'Windows bind mount unexpectedly visible; update the docs caveat' }
+          Write-Output 'bind mount rejected as documented'
+          exit 0
       - name: stdin and tty through the bridge
         timeout-minutes: 5
         run: |

@@ -2,6 +2,9 @@ name: inspect-wsl
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: read
+
 jobs:
   inspect:
     runs-on: windows-latest
@@ -21,7 +24,7 @@ jobs:
         run: |
           Get-Item $env:TEMP\dockup-* -ErrorAction Continue | Select-Object FullName, Length
           wsl --list --verbose
-      - name: distro audit — init and services
+      - name: distro audit (init and services)
         run: |
           $init = wsl -d dockup -u root -- ps -p 1 -o comm=
           if ($init -notmatch 'systemd') { throw "PID 1 = $init" }
@@ -35,7 +38,7 @@ jobs:
           }
           wsl -d dockup -u root -- test -S /var/run/docker.sock
           if ($LASTEXITCODE -ne 0) { throw 'docker.sock missing' }
-      - name: distro audit — packages and engine identity
+      - name: distro audit (packages and engine identity)
         run: |
           wsl -d dockup -u root -- dpkg -l docker-ce docker-ce-cli containerd.io socat docker-buildx-plugin docker-compose-plugin
           if ($LASTEXITCODE -ne 0) { throw 'engine packages missing' }
@@ -45,7 +48,7 @@ jobs:
           if ($drv -notmatch 'overlay2|overlayfs') { throw "storage driver = $drv" }
           $cg = wsl -d dockup -u root -- docker info --format '{{.CgroupVersion}}'
           if ($cg -notmatch '2') { throw "cgroup version = $cg" }
-      - name: distro audit — config files and kernel features
+      - name: distro audit (config files and kernel features)
         run: |
           $wc = (wsl -d dockup -u root -- cat /etc/wsl.conf) -join "`n"
           if ($wc -notmatch 'systemd=true') { throw "wsl.conf = $wc" }
@@ -74,14 +77,14 @@ jobs:
         with:
           name: dockup-provenance
           path: provenance.txt
-      - name: self-heal — break the engine
+      - name: self-heal (break the engine)
         run: |
           wsl -d dockup -u root -- systemctl stop docker.service docker.socket
           Start-Sleep 3
           wsl -d dockup -u root -- docker version --format '{{.Server.Version}}' | Out-Null
           if ($LASTEXITCODE -eq 0) { throw 'engine should be down after stop' }
           exit 0
-      - name: self-heal — doctor --fix restores it
+      - name: self-heal (doctor --fix restores it)
         timeout-minutes: 15
         run: |
           .\dockup.exe doctor --fix
@@ -112,7 +115,7 @@ jobs:
           echo y | .\dockup.exe uninstall
           $list = wsl --list --quiet
           if ($list -match 'dockup') { throw 'distro still present' }
-      - name: legacy recovery — missing config recreates
+      - name: legacy recovery (missing config recreates)
         run: |
           Remove-Item "$env:USERPROFILE\.dockup\config.json" -Force
           .\dockup.exe ps

@@ -1,39 +1,31 @@
 # Contributing
 
 Issues and pull requests are welcome at
-[CHE3MZ/dockup](https://github.com/CHE3MZ/dockup) — please use the
+[CHE3MZ/dockup](https://github.com/CHE3MZ/dockup). Please use the
 bug/feature templates and the pull request checklist; they encode the
 rules below.
 
+- **Testing.** Most testing runs in the cloud through this project's GitHub
+  Actions workflows, though a local run is fine when you can do one. Test your
+  changes, and don't open a PR for untested or unreviewed work. Push only
+  after the build and the linters are clean; that keeps the code easy to
+  maintain and review.
+- **Short commit messages.** Keep them short and readable. Skip "updated
+  something" and "fixed something"; a one-line summary of what the commit
+  adds or removes is enough.
+- **Bug checks.** Run the linters and other checkers as you change things.
+  `scripts\ops\go-bugcheck.sh` and `scripts\ops\go-seccheck.sh` write their
+  output to the logs folder. Install whatever they need first.
 
-- **Testing.** Testing must generally be done on the cloud via the github actions
-  workflows that have been created for this project, local tests are preferred over
-  cloud ones, but generally speaking most of the project's testing is done on the cloud,
-  make sure to test all of your changes and report any errors etc. , it is generally
-  recommended that you only push your changes once you have no runtime or pre-compliation
-  linting errors, in order to ensure that the code remains high quality and possible to 
-  maintain, please avoid opening pull requests for untested and or unreviewed changes,
-  doing so makes things harder for me and or anyone else who is in charge of maintaining
-  the project and reviewing/accepting PRs.
-- **Short commit messages** please make sure to keep your commit messages short and well
-  formatted, try to avoid using random commit messages like "updated something" or
-  "fixed something", just a simple overview of what your commit adds or removes is enough
-  I'm not asking for less nor more than that.
-- **Bug Checks** make sure to run bug checkers linters and other tools as you're changing
-  stuff to ensure that you don't write flawed code, you can use the scripts\ops\go-bugcheck.sh
-  and the scripts\ops\go-seccheck.sh to quickly check your changes in the logs folder, make
-  sure you have all the tools that the scripts demand installed before running them!
+  *Running these linters is a must for big changes.*
 
-  *running these linters is a MUST if you are working on big changes.*
-  
-- **Tests:** make sure to run and add tests if possible or needed.
-- **Docs:** make sure to document your changes into docs/docs if possible.
-- **Comments:** make sure to add comments next to your changes if possible.
-- **Frozen strings** (CI greps them): setup banner flow,
+- **Tests.** Run and add tests when possible or needed.
+- **Docs.** Document your changes in `docs/docs` when possible.
+- **Comments.** Add comments next to your changes when possible.
+- **Frozen strings.** CI greps them, so never reword: the setup banner flow,
   `dockup has not been setup yet run "dockup setup" to set it up.`,
   `starting...`, `test results :`, `autostart: on/off`,
   `STATUS/AUTOSTART/INSTALLED/SIZE/MEMORY`, `read-only`, `ok: autostart on`,
-  `dry run complete` — never reword.
-- **Green before review:** make sure all the workflows are green before you
-  submit your PR. most of them will run automatically so just check on them
-  to see if everything is showing green, if not investigate why !
+  `dry run complete`.
+- **Green before review.** Most workflows run automatically, so check that
+  they all pass before you submit. If one is red, find out why.

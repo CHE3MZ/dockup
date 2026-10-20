@@ -1,7 +1,9 @@
-# **Homepage:** [here.](index.md)
-# **Guides:** [here.](guides/installation.md)
-# **Developers:** [here.](developers/architecture.md)
-# **Contributing:** [here.](contributing.md)
+# See also
 
-# **Github Page:** [here.](https://github.com/CHE3MZ/dockup)
-![alt text](assets/icon-black.png)
+- [Homepage](index.md)
+- [Guides](guides/installation.md)
+- [Developers](developers/architecture.md)
+- [Contributing](contributing.md)
+- [GitHub repository](https://github.com/CHE3MZ/dockup)
+
+![dockup icon](assets/icon-black.png)

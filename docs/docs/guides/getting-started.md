@@ -7,7 +7,7 @@
 | Foreground | `dockup` | Ctrl+C |
 | Background | `dockup daemon start` | `dockup daemon stop` |
 
-Only one may run at a time — the second starter refuses with a one-line
+Only one may run at a time; the second starter refuses with a one-line
 message telling you what is already holding the bridge.
 
 ## Your first containers
@@ -27,7 +27,7 @@ docker run --rm hello-world
 docker run -it --rm debian:bookworm bash
 ```
 
-Interactive sessions, `exec`, and `logs -f` all work natively — see
+Interactive sessions, `exec`, and `logs -f` all work natively; see
 [Using Docker](using-docker.md).
 
 ## Checking status
@@ -54,10 +54,10 @@ dockup daemon stop   # stop the background bridge (distro stays warm for fast re
 dockup shutdown      # stop everything, foreground included, and terminate the distro (ps => stopped)
 ```
 
-Ctrl+C in a foreground stops the bridge the same way `daemon stop` does —
-the distro itself stays warm in both cases (`shutdown` is the only thing
-that stops it). Ctrl+C not working at all? Run `dockup shutdown` from
-another terminal — it stops the stuck foreground too.
+Ctrl+C in a foreground stops the bridge the same way `daemon stop` does.
+The distro itself stays warm in both cases; `shutdown` is the only thing
+that stops it. Ctrl+C not working at all? Run `dockup shutdown` from
+another terminal. It stops the stuck foreground too.
 
 ## Starting at Windows login (opt-in)
 

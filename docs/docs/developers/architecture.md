@@ -22,7 +22,7 @@ containers
 ## Design decisions
 
 - **Raw byte-copy, no HTTP parsing.** Hijacked streams (`run -it`, `exec`,
-  `logs -f`, TTY resize) only survive a transparent proxy — anything that
+  `logs -f`, TTY resize) only survive a transparent proxy; anything that
   parses HTTP breaks them.
 - **No TCP hop.** WSL2 NAT loopback can't reliably reach a distro-bound
   `127.0.0.1`, so the bridge speaks to the engine over socat `STDIO` per
@@ -34,7 +34,7 @@ containers
 - **Loud failures.** If the backend dies before producing a byte, the client
   gets HTTP 500 instead of a silent empty reply, and the daemon log records why.
 - **`dockup_engine`, not `docker_engine`.** CI runners and user machines
-  already hold Docker Desktop's pipe — hijacking it would fake a pass.
+  already hold Docker Desktop's pipe, so hijacking it would fake a pass.
 - **Debian rootfs, not nocloud.** The cloud `disk.raw` tarballs fail
   `wsl --import`; the debuerreotype rootfs tarballs (same bookworm content)
   import cleanly.
@@ -53,7 +53,7 @@ containers
 - **Single source of truth.** `installed` lives only in
   `%APPDATA%\dockup\state.json` (locked read-modify-write);
   `~/.dockup/config.json` holds user intent only. Old config files carrying
-  the key still load — the key is ignored and dropped on next save.
+  the key still load; the key is ignored and dropped on next save.
 - **systemd reboot.** One `wsl --terminate dockup` after writing `wsl.conf`
   so systemd becomes PID 1; every unit (re)start is preceded by
   `systemctl reset-failed` (start-limit throttling) and followed by a

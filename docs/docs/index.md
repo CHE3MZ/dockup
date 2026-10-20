@@ -4,19 +4,19 @@
 
 Docker Engine in a dedicated WSL distro, driven from Windows. No Docker
 Desktop, no services, no autostart unless you ask for it: one static
-`dockup.exe` installs Debian into WSL as `dockup`, runs dockerd there under
-systemd, and bridges the Windows Docker CLI to it over a named pipe
-(plus an optional `127.0.0.1` TCP bridge).
+`dockup.exe` imports a prebuilt Debian image into WSL as `dockup`, runs
+dockerd there under systemd, and bridges the Windows Docker CLI to it over
+a named pipe (plus an optional `127.0.0.1` TCP bridge).
 
 ## Why dockup?
 
 - **One distro, one job.** A disposable Debian distro named `dockup` that
   exists only to run the Docker daemon. Your other distros are never touched.
 - **Native CLI feel.** `run -it`, `exec`, `logs -f`, and Compose all behave
-  natively over a raw byte-copy bridge — no `-i` workarounds, no TCP ports,
-  no firewall rules by default.
+  natively over a raw byte-copy bridge, so you don't need `-i` workarounds,
+  TCP ports, or firewall rules by default.
 - **Nothing runs unless you start it.** Foreground (`dockup`) or background
-  (`dockup daemon start`) — plus opt-in startup at Windows login.
+  (`dockup daemon start`), plus opt-in startup at Windows login.
 - **Self-healing.** `doctor` repairs stale state, `--fix` rebuilds a broken
   engine, and `restore` resets tampering while keeping your images.
 
@@ -36,7 +36,7 @@ Or run in the foreground with `dockup` (Ctrl+C stops it).
 | Command | What it does |
 |---|---|
 | `dockup` | Foreground run, logs inline, Ctrl+C stops |
-| `dockup setup [--amd\|--arm] [--path=DIR] [--dry-run]` | Download, verify, and import the signed image (source fallback); verify |
+| `dockup setup [--amd\|--arm] [--path=DIR] [--dry-run]` | Download, verify, and import the signed image (with a source fallback) |
 | `dockup uninstall` | Remove the distro data (keeps the cached image and default path) |
 | `dockup prune [--all] [--volumes] [--keep-image]` | Reclaim in-distro space and delete the cached image |
 | `dockup restore [--full]` | Reset tampering (light) or reinstall from scratch (`--full`) |

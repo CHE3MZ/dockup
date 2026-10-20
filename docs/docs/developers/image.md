@@ -105,10 +105,10 @@ and `DOCKUP_IMAGE_TAG`. Verification against the embedded key is not optional.
 `.github/workflows/image.yml` builds both arches on every Monday at 04:00 UTC,
 on manual dispatch, and on every `v*` tag:
 
-- `build` — rootfs, checksum, signature, artifacts
-- `smoke` — imports the amd64 tarball on `windows-latest`, checks that systemd
+- `build`: rootfs, checksum, signature, artifacts
+- `smoke`: imports the amd64 tarball on `windows-latest`, checks that systemd
   is PID 1, waits for dockerd, runs `hello-world`, then unregisters
-- `publish` — checks each tarball against its `.sha256` and verifies both
+- `publish`: checks each tarball against its `.sha256` and verifies both
   signatures with `scripts/image/pubkey.txt`. On a `v*` tag it waits for the
   release created by `release.yml` and attaches the image assets to it;
   otherwise it replaces the assets on the `image-latest` rolling release
@@ -141,3 +141,6 @@ do not ship `wsl.exe` yet (see `arm-test.yml`).
 - Rebuild on a schedule, otherwise the baked engine goes stale.
 - Keep the from-source path as the escape hatch if an image is broken or a
   user does not want to trust the CI-built blob.
+- The fallback path is weaker: it downloads debuerreotype's rootfs over HTTPS
+  without a signature (the Docker packages installed afterwards come from
+  Docker's GPG-signed apt repo). Prefer the signed image.

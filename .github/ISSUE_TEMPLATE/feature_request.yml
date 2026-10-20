@@ -22,7 +22,7 @@ body:
     id: fit
     attributes:
       label: Fit check
-      description: dockup stays tiny and host-safe — please confirm the fit
+      description: dockup stays tiny and host-safe. Confirm the fit:
       options:
         - label: Needs no new runtime dependencies and no host mutation beyond state/log/vhdx dirs
         - label: Works with the existing named-pipe bridge (no new ports/firewall by default)

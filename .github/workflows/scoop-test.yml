@@ -2,6 +2,9 @@ name: scoop-test
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: read
+
 jobs:
   scoop:
     runs-on: windows-latest

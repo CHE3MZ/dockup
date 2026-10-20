@@ -17,7 +17,7 @@ below.)
 | TCP (opt-in, see [Configuration](configuration.md)) | `tcp://127.0.0.1:2375` (or your custom port) |
 
 !!! note
-    The pipe is `dockup_engine`, not `docker_engine` — that name belongs to
+    The pipe is `dockup_engine`, not `docker_engine`; that name belongs to
     Docker Desktop, and dockup deliberately avoids hijacking it.
 
 ## Everyday commands
@@ -37,16 +37,43 @@ With the Compose plugin:
 
 ```powershell
 docker compose up --abort-on-container-exit
+docker compose build
 docker compose down
 ```
 
-The classic `docker-compose` binary works too — just export `DOCKER_HOST`
-first so it finds the bridge.
+The classic `docker-compose` binary works too. Just export `DOCKER_HOST`
+first so it finds the bridge. Builds work as well: the client streams the
+build context to the daemon over the same pipe.
+
+### Bind mounts
+
+The daemon runs on Linux inside the distro, so a Windows host path does not
+exist for it:
+
+```powershell
+docker run -v C:\proj:/app ...        # fails: no such path in the distro
+docker run -v ./data:/data ...        # Compose resolves this to a Windows path too
+```
+
+Use named volumes instead; they live in the distro and work everywhere:
+
+```yaml
+services:
+  app:
+    image: alpine
+    volumes:
+      - data:/var/lib/app
+volumes:
+  data:
+```
+
+If you need to edit bind-mounted files from Windows, keep the project inside
+the distro instead and open it through `\\wsl$\dockup\...`.
 
 ## What "native" means here
 
 The bridge is a raw byte-copy per connection straight into the in-distro
 engine socket, so HTTP-hijacked streams (`run -it`, `exec`, `logs -f`,
 `attach`) behave exactly like a local daemon. There is no protocol parsing
-in the middle to break them — including terminal resize, which is just
+in the middle to break them, including terminal resize, which is just
 another API call multiplexed over the same stream.

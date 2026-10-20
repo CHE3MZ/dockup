@@ -29,10 +29,10 @@ const (
 	PipeName = `\\.\pipe\dockup_engine`
 
 	// RootfsBase hosts the official Debian rootfs tarballs (debuerreotype).
-	// NOTE: revision.md names cloud nocloud tarballs, but those contain only
-	// disk.raw and fail `wsl --import` with WSL_E_NOT_A_LINUX_DISTRO
-	// (proven in GH e2e). The debuerreotype rootfs tarballs below are the
-	// official Debian root filesystems (same bookworm content) and import cleanly.
+	// NOTE: cloud nocloud tarballs contain only disk.raw and fail
+	// `wsl --import` with WSL_E_NOT_A_LINUX_DISTRO (proven in GH e2e). The
+	// debuerreotype rootfs tarballs below are the official Debian root
+	// filesystems (same bookworm content) and import cleanly.
 	RootfsBase = "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts"
 
 	// MaxLogBytes caps the daemon log before rotation.

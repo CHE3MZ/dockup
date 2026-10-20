@@ -2,9 +2,9 @@
 
 Releases use `v*` tags. A tag starts two workflows:
 
-- `release.yml` — GoReleaser builds the Windows binaries and creates the GitHub
+- `release.yml`: GoReleaser builds the Windows binaries and creates the GitHub
   release with `GITHUB_TOKEN`.
-- `image.yml` — builds, signs, and smoke-tests both rootfs tarballs, then
+- `image.yml`: builds, signs, and smoke-tests both rootfs tarballs, then
   attaches them to the same release.
 
 The release is only usable once both finish. The image job fails if the release

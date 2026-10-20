@@ -1,4 +1,4 @@
-// Command dockup is the single static Windows CLI per revision.md.
+// Command dockup implements the dockup CLI.
 package main
 
 import (
@@ -244,10 +244,10 @@ func cmdSetup(cfg userconfig.Config, args []string) int {
 }
 
 func usage() {
-	fmt.Print(ui.Header("dockup") + ui.White(" — docker engine in a dedicated WSL distro.\n") + `
+	fmt.Print(ui.Header("dockup") + ui.White(" - docker engine in a dedicated WSL distro.\n") + `
 ` + ui.LightBlue("Usage:") + `
   ` + ui.Bold("dockup") + `                     Foreground run (Ctrl+C to stop)
-  ` + ui.Bold("dockup setup") + `               Launch the interactive setup wizard
+  ` + ui.Bold("dockup setup") + `               Set up the dockup distro
   ` + ui.Bold("dockup uninstall") + `           Uninstall the dockup distro from WSL
   ` + ui.Bold("dockup restore [--full]") + `    Reset the distro to a clean state
   ` + ui.Bold("dockup ps") + `                  Show dockup's status
@@ -610,7 +610,7 @@ func (in *interrupter) arm(cancel context.CancelFunc) {
 		in.sayDown()
 		cancel()
 		<-sig
-		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again — forcing exit"))
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: interrupted again, forcing exit"))
 		os.Exit(130)
 	}()
 }
@@ -641,12 +641,12 @@ func foreground(cfg userconfig.Config) int {
 		return 1
 	}
 	if s.Daemon.PID != 0 && daemon.DaemonAlive(s) {
-		fmt.Fprintln(os.Stderr, ui.Red("dockup is already running in the background — run dockup daemon stop first."))
+		fmt.Fprintln(os.Stderr, ui.Red("dockup is already running in the background. Run dockup daemon stop first."))
 		return 1
 	}
 	if relay.AliveOn(pipe) {
 		if !s.Installed {
-			fmt.Fprintln(os.Stderr, ui.Red("dockup: pipe is held by another program — stop it before running dockup."))
+			fmt.Fprintln(os.Stderr, ui.Red("dockup: pipe is held by another program. Stop it before running dockup."))
 		} else {
 			fmt.Fprintln(os.Stderr, ui.Red("dockup is already running (another foreground or daemon holds the pipe)."))
 		}
@@ -660,7 +660,7 @@ func foreground(cfg userconfig.Config) int {
 		// State claims an install: prove the distro survived. An external
 		// wsl --unregister must flip us to not-installed, never serve dead.
 		if present, err := doctor.ReconcileDistro(); err == nil && !present {
-			logx.Err("distro \"dockup\" is missing from WSL — it may have been removed outside dockup. Run dockup doctor, then dockup setup to reinstall.")
+			logx.Err("distro \"dockup\" is missing from WSL. It may have been removed outside dockup. Run dockup doctor, then dockup setup to reinstall.")
 			return 1
 		}
 	}
@@ -711,7 +711,7 @@ func foreground(cfg userconfig.Config) int {
 			in.sayDown()
 			return 130
 		}
-		logx.Err("distro \"dockup\" is present but not responding (%v) — run dockup doctor --fix to repair it", err)
+		logx.Err("distro \"dockup\" is present but not responding (%v). Run dockup doctor --fix to repair it", err)
 		return 1
 	} else {
 		warm.Done()
@@ -741,7 +741,7 @@ func serveForever(cfg userconfig.Config) int {
 		return 1
 	}
 	if present, err := doctor.ReconcileDistro(); err == nil && !present {
-		fmt.Fprintln(os.Stderr, ui.Red("dockup: helper failed (distro \"dockup\" is missing from WSL — run dockup doctor, then dockup setup to reinstall)"))
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: helper failed (distro \"dockup\" is missing from WSL. Run dockup doctor, then dockup setup to reinstall)"))
 		return 1
 	}
 	if err := userconfig.ValidatePort(cfg.EffectivePort()); cfg.UseTCP && err != nil {
@@ -808,7 +808,7 @@ func cmdPs(cfg userconfig.Config, jsonOut bool) int {
 	}
 	fmt.Println(pstable.RenderRow(row))
 	if !alive && !s.Installed {
-		fmt.Printf("%s\n", ui.Gray("(not installed — run dockup setup to create it)"))
+		fmt.Printf("%s\n", ui.Gray("(not installed. Run dockup setup to create it)"))
 	} else if alive && !s.Installed {
 		fmt.Printf("%s\n", ui.Gray("(pipe held by another program, not dockup)"))
 	}
@@ -946,7 +946,7 @@ func cmdDaemon(cfg userconfig.Config, args []string) int {
 	s, _ := state.Load()
 	if relay.AliveOn(cfg.EffectivePipe()) && s.Daemon.PID == 0 && !daemon.DaemonAlive(s) {
 		if args[0] == "start" {
-			fmt.Fprintln(os.Stderr, ui.Red("dockup is already running in the foreground — stop it with Ctrl+C or run dockup shutdown."))
+			fmt.Fprintln(os.Stderr, ui.Red("dockup is already running in the foreground. Stop it with Ctrl+C or run dockup shutdown."))
 			return 1
 		}
 	}
@@ -1102,7 +1102,7 @@ func cmdShutdown(cfg userconfig.Config) int {
 			continue
 		}
 		if err := proc.Kill(); err != nil {
-			logx.Warn("cannot stop dockup (pid %d): %v — try an elevated terminal", pid, err)
+			logx.Warn("cannot stop dockup (pid %d): %v; try an elevated terminal", pid, err)
 			continue
 		}
 		logx.Info("stopped foreground dockup (pid %d)", pid)
@@ -1110,7 +1110,7 @@ func cmdShutdown(cfg userconfig.Config) int {
 	_ = relay.WaitDeadOn(cfg.EffectivePipe(), 10*time.Second)
 	_ = wsl.Terminate(config.DistroName)
 	if relay.AliveOn(cfg.EffectivePipe()) {
-		fmt.Fprintln(os.Stderr, ui.Red("dockup: pipe still held by another program — stop it before retrying"))
+		fmt.Fprintln(os.Stderr, ui.Red("dockup: pipe still held by another program. Stop it before retrying"))
 		return 1
 	}
 	fmt.Printf("%s\n", ui.Green("dockup shutdown complete (stopped)"))
