@@ -20,7 +20,7 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-for cmd in debootstrap tar gzip sha256sum curl systemctl; do
+for cmd in debootstrap tar gzip sha256sum curl systemctl mount umount mountpoint; do
   command -v "$cmd" >/dev/null || { echo "missing required command: $cmd" >&2; exit 1; }
 done
 
@@ -72,9 +72,9 @@ cp /etc/resolv.conf "$ROOT/etc/resolv.conf"
 printf '#!/bin/sh\nexit 101\n' > "$ROOT/usr/sbin/policy-rc.d"
 chmod +x "$ROOT/usr/sbin/policy-rc.d"
 
-APT=(apt-get)
+APT=(apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
 if [[ $FOREIGN -eq 1 ]]; then
-  APT=(apt-get -o APT::Sandbox::User=root)
+  APT+=(-o APT::Sandbox::User=root)
 fi
 
 echo "==> installing base packages"
@@ -125,6 +125,17 @@ rm -f "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id"
 mkdir -p "$ROOT/var/lib/dbus"
 ln -sf /etc/machine-id "$ROOT/var/lib/dbus/machine-id"
 
+echo "==> unmounting build mounts"
+for d in sys proc dev; do
+  umount -Rf "$ROOT/$d" 2>/dev/null || true
+done
+for d in sys proc dev; do
+  if mountpoint -q "$ROOT/$d"; then
+    echo "refusing to pack: $d is still mounted" >&2
+    exit 1
+  fi
+done
+
 echo "==> packing"
 mkdir -p "$OUTDIR"
 NAME="dockup-$ARCH.tar.gz"
@@ -132,6 +143,7 @@ TAR="$OUTDIR/$NAME"
 ( cd "$ROOT" && tar \
     --numeric-owner --xattrs --xattrs-include='*' --acls \
     --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 \
+    --exclude='./proc/*' --exclude='./sys/*' --exclude='./dev/*' \
     -cf - . ) | gzip -9 -n > "$TAR"
 ( cd "$OUTDIR" && sha256sum "$NAME" > "$NAME.sha256" )
 
