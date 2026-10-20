@@ -243,26 +243,39 @@ func cmdSetup(cfg userconfig.Config, args []string) int {
 	return setup.RunEx(setup.Options{Arch: arch, Path: f.path, DryRun: dryRun, Cfg: cfg})
 }
 
+// helpCmd renders one aligned command row. The command column is padded
+// before styling so the escape codes never skew the layout.
+func helpCmd(command, description string) string {
+	const width = 20
+	pad := "  "
+	if len(command) < width {
+		pad = strings.Repeat(" ", width-len(command))
+	}
+	return "  " + ui.Bold(command) + pad + ui.White(description) + "\n"
+}
+
 func usage() {
-	fmt.Print(ui.Header("dockup") + ui.White(" - docker engine in a dedicated WSL distro.\n") + `
-` + ui.LightBlue("Usage:") + `
-  ` + ui.Bold("dockup") + `                     Foreground run (Ctrl+C to stop)
-  ` + ui.Bold("dockup setup") + `               Set up the dockup distro
-  ` + ui.Bold("dockup uninstall") + `           Uninstall the dockup distro from WSL
-  ` + ui.Bold("dockup restore [--full]") + `    Reset the distro to a clean state
-  ` + ui.Bold("dockup ps") + `                  Show dockup's status
-  ` + ui.Bold("dockup daemon") + `              Start | Stop | Restart | Status
-  ` + ui.Bold("dockup shutdown") + `            Stop everything
-  ` + ui.Bold("dockup ssh [...]") + `           Open a shell inside the distro
-  ` + ui.Bold("dockup prune [--all]") + `       Reclaim distro disk space and cached images
-  ` + ui.Bold("dockup doctor [--fix]") + `      Repair stale states
-  ` + ui.Bold("dockup upgrade") + `             Upgrade the engine and cached setup image
-  ` + ui.Bold("dockup version") + `             Show current version
-  ` + ui.Bold("dockup help [command]") + `      Show this help text
-  ` + "\n" +
-		ui.Gray("Config File: ~/.dockup/config.json") + `
-  ` + ui.Gray("Docs: ") + ui.Blue("https://che3mz.github.io/dockup/") + `
- `)
+	fmt.Print(ui.Header("dockup") + ui.White(" - Docker Engine in a dedicated WSL distro.\n") + "\n" +
+		ui.LightBlue("Usage:") + "\n" +
+		helpCmd("dockup", "Run in the foreground (Ctrl+C to stop)") +
+		helpCmd("dockup <command>", "Run a command") + "\n" +
+		ui.LightBlue("Commands:") + "\n" +
+		helpCmd("setup", "Set up the dockup distro") +
+		helpCmd("ps", "Show status") +
+		helpCmd("ssh [-- command]", "Open a shell inside the distro") +
+		helpCmd("version", "Show the version") +
+		helpCmd("help [command]", "Show help for a command") + "\n" +
+		ui.LightBlue("Daemon:") + "\n" +
+		helpCmd("daemon", "Start, stop, restart, or inspect the background process") +
+		helpCmd("shutdown", "Stop everything") +
+		helpCmd("upgrade", "Upgrade the engine and cached setup image") + "\n" +
+		ui.LightBlue("Maintenance:") + "\n" +
+		helpCmd("restore", "Reset the distro to a clean state") +
+		helpCmd("prune", "Reclaim disk space and cached images") +
+		helpCmd("doctor", "Check health and repair stale state") +
+		helpCmd("uninstall", "Remove the distro and saved state") + "\n" +
+		ui.Gray("Config file: ~/.dockup/config.json") + "\n" +
+		ui.Gray("Docs:        ") + ui.Blue("https://che3mz.github.io/dockup/") + "\n")
 }
 
 func helpTopic(name string) int {
@@ -302,12 +315,12 @@ func setupHelp() {
   ` + ui.Cyan(`"dockup"`) + ` distro, and check that the daemon and bridge work.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup setup [--amd|--arm] [--path=DIR] [--dry-run]
+  ` + ui.Bold("dockup setup") + ` [--amd|--arm] [--path=DIR] [--dry-run]
 
 ` + ui.LightBlue("Options:") + `
   ` + ui.Bold("--amd, --arm") + `    Architecture (default: --amd)
   ` + ui.Bold("--path=DIR") + `      Install root, e.g. --path="D:/WSL/Dockup".
-                   The folder you give becomes the new default.
+                  The folder you give becomes the new default.
   ` + ui.Bold("--dry-run") + `       Show what setup would do, without changing anything.
   ` + ui.Bold("-h, --help") + `      Show this help.
 
@@ -325,7 +338,7 @@ func uninstallHelp() {
   again; use ` + ui.Bold("dockup prune") + ` to remove it.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup uninstall [--force]
+  ` + ui.Bold("dockup uninstall") + ` [--force]
 
   ` + ui.Bold("--force, -f") + `   Skip the confirmation (for scripts).
 `)
@@ -337,7 +350,7 @@ func sshHelp() {
   and network debugging), or run one remote command and exit.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup ssh [-- command ...]
+  ` + ui.Bold("dockup ssh") + ` [-- command ...]
 
 ` + ui.LightBlue("Examples:") + `
   dockup ssh
@@ -356,7 +369,7 @@ func pruneHelp() {
   uninstall too, when only the cache is left.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup prune [--all] [--volumes] [--keep-image] [--force]
+  ` + ui.Bold("dockup prune") + ` [--all] [--volumes] [--keep-image] [--force]
 
   ` + ui.Bold("--all") + `         Also remove all unused images (default: dangling only).
   ` + ui.Bold("--volumes") + `     Also remove unused volumes (destroys their data).
@@ -381,7 +394,7 @@ func restoreHelp() {
   setup's arch, current install folder).
 
 ` + ui.LightBlue("Usage:") + `
-  dockup restore [--full] [--amd|--arm] [--path=DIR] [--force]
+  ` + ui.Bold("dockup restore") + ` [--full] [--amd|--arm] [--path=DIR] [--force]
 
   ` + ui.Bold("--force, -f") + `   Skip the confirmation (for scripts).
 `)
@@ -441,7 +454,7 @@ func psHelp() {
   plus live probes).
 
 ` + ui.LightBlue("Usage:") + `
-  dockup ps [--json]
+  ` + ui.Bold("dockup ps") + ` [--json]
 
   ` + ui.Bold("--json, -j") + `   Machine-readable output for scripts.
 `)
@@ -452,14 +465,16 @@ func daemonHelp() {
   Run dockup in the background (named pipe, plus TCP if enabled).
 
 ` + ui.LightBlue("Usage:") + `
-  dockup daemon start     start the background process
-  dockup daemon stop      stop the background process
-  dockup daemon restart   restart the background process
-  dockup daemon status    brief health (running / stopped)
-  dockup daemon log       follow the log (read-only, Ctrl+C to exit)
-  dockup daemon autostart [on|off]
-                          show (no arg) or set starting dockup at Windows login
-                          (default off, stored in ~/.dockup/config.json)
+  ` + ui.Bold("dockup daemon") + ` <command>
+
+` + ui.LightBlue("Commands:") + `
+` + helpCmd("start", "Start the background process") +
+		helpCmd("stop", "Stop the background process") +
+		helpCmd("restart", "Restart the background process") +
+		helpCmd("status", "Brief health (running or stopped)") +
+		helpCmd("log", "Follow the log (read-only, Ctrl+C to exit)") +
+		helpCmd("autostart", "Show or set autostart at Windows login (default off)") + `
+  Stored in ` + ui.Cyan("~/.dockup/config.json") + `.
 `)
 }
 
@@ -468,7 +483,7 @@ func shutdownHelp() {
   Stop everything dockup is running and shut down its WSL distro.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup shutdown
+  ` + ui.Bold("dockup shutdown") + `
 `)
 }
 
@@ -481,7 +496,7 @@ func doctorHelp() {
   reinstalled and reconfigured, then verified.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup doctor [--fix]
+  ` + ui.Bold("dockup doctor") + ` [--fix]
 `)
 }
 
@@ -494,8 +509,8 @@ func upgradeHelp() {
   ` + ui.Bold("update") + ` is an alias for this command.
 
 ` + ui.LightBlue("Usage:") + `
-  dockup upgrade
-  dockup update
+  ` + ui.Bold("dockup upgrade") + `
+  ` + ui.Bold("dockup update") + `
 `)
 }
 
@@ -553,9 +568,9 @@ func cmdUpgrade() int {
 	return 0
 }
 
-// printVersion prints the one-line version sentence.
+// printVersion prints the name and version on one line, easy to parse.
 func printVersion() {
-	fmt.Printf("%s", ui.White(fmt.Sprintf("you're running the %s version.\n", version)))
+	fmt.Printf("%s %s\n", ui.Header("dockup"), ui.White(version))
 }
 
 func versionHelp() {
@@ -563,7 +578,7 @@ func versionHelp() {
   Show the dockup version (` + ui.Bold("-v") + ` and ` + ui.Bold("--version") + ` do the same thing).
 
 ` + ui.LightBlue("Usage:") + `
-  dockup version
+  ` + ui.Bold("dockup version") + `
 `)
 }
 
