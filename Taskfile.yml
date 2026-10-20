@@ -2,25 +2,49 @@ version: '3'
 
 tasks:
   default:
-    desc: Exec other tasks by default.
-    deps:
-      - build
-  full:
-    desc: Exec some important tasks.
-    deps:
-      - build
-      - test
-      - lint
+    desc: Run default tasks.
+    cmds:
+      - task: ops
+        ignore_error: true
+      - task: build
+  ops:
+    desc: Run scripts in scripts/ops
+    cmds:
+      - sh scripts/ops/go-bugcheck.sh
+      - sh scripts/ops/go-seccheck.sh
+  lint:
+    desc: Run golangci-lint.
+    cmds:
+      - golangci-lint run ./...
+  test:
+    desc: Run go tests via script.
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File ./scripts/test.ps1
   build:
-    desc: Local build test into dist.
+    desc: Build all packages into dist/.
     cmds:
       - powershell -ExecutionPolicy Bypass -File ./scripts/build.ps1
-  test:
-    desc: Local test minimal
+  smoke:
+    desc: End-to-end smoke with the generator CLI.
     cmds:
-      - ./dist/dockup-windows-amd64.exe help
-  lint:
-    desc: Local Lint test (logged into log/)
+      - powershell -ExecutionPolicy Bypass -File ./scripts/smoke.ps1
+  build-site:
     cmds:
-      - sh ./scripts/ops/go-bugcheck.sh
-      - sh ./scripts/ops/go-seccheck.sh
+      - cd docs && mkdocs build
+  check-links:
+    cmds:
+      - cmd: lychee .
+  cliff:
+    desc: Run git cliff
+    silent: true
+    env:
+      RUST_LOG: off
+    cmds:
+      - git-cliff --unreleased --strip all
+  scan:
+    desc: Run other ops tools on the repo.
+    cmds:
+      - cmd: opengrep scan
+      - cmd: osv-scanner scan .
+      - cmd: gitleaks git . --no-banner
+      - cmd: scorecard --local . --format json | gron

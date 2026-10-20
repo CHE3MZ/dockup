@@ -1,0 +1,38 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - gosec
+    - ineffassign
+    - unused
+    - misspell
+  disable:
+    # Cobra forces package-level vars for flags.
+    - gochecknoglobals
+    # Style-only, too noisy for now.
+    - wsl
+    - funlen
+    - nlreturn
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -SA1019
+    gosec:
+      excludes:
+        - G115
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
