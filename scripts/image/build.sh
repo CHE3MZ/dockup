@@ -147,5 +147,11 @@ TAR="$OUTDIR/$NAME"
     -cf - . ) | gzip -9 -n > "$TAR"
 ( cd "$OUTDIR" && sha256sum "$NAME" > "$NAME.sha256" )
 
+# Hand the artifacts back to the invoking user so signing and uploads do not
+# need root. sudo sets SUDO_UID/SUDO_GID; a plain root shell leaves them unset.
+if [[ -n "${SUDO_UID:-}" && -n "${SUDO_GID:-}" ]]; then
+  chown "$SUDO_UID:$SUDO_GID" "$OUTDIR" "$TAR" "$TAR.sha256"
+fi
+
 echo "built $TAR ($(du -h "$TAR" | cut -f1))"
 echo "sha256 $(cut -d' ' -f1 "$OUTDIR/$NAME.sha256")"
