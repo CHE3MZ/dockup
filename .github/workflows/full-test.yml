@@ -516,7 +516,7 @@ jobs:
           $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\dockup.lnk"
           if (Test-Path $lnk) { throw 'startup entry left behind by uninstall' }
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path not retained: $($c.default_path)" }
-          if (!(Test-Path 'C:\dockup-fulltest-wsl\distro')) { throw 'distro folder should be removed' }
+          if (Test-Path 'C:\dockup-fulltest-wsl\distro\ext4.vhdx') { throw 'distro disk should be removed by uninstall' }
           if (!(Test-Path 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz')) { throw 'uninstall removed the image cache' }
       - name: second uninstall succeeds (idempotent, forced)
         run: |

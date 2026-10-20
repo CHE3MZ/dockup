@@ -430,7 +430,9 @@ func Uninstall(force bool) int {
 		return nil
 	})
 	if distroDir != root {
-		_ = os.RemoveAll(distroDir)
+		if err := removeDirRetry(distroDir); err != nil {
+			logx.Warn("could not remove %s: %v (WSL may still hold it; the next setup cleans it)", distroDir, err)
+		}
 	} else {
 		// Legacy install: the VHDX sits directly in the install root, which
 		// also holds cache\. Remove only WSL-owned files.
@@ -453,4 +455,17 @@ func Uninstall(force bool) int {
 	}
 	logx.Ok("dockup uninstalled")
 	return 0
+}
+
+// removeDirRetry tolerates WSL releasing the VHDX handle a moment after
+// --unregister returns; Windows refuses to delete a file still in use.
+func removeDirRetry(dir string) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		if err = os.RemoveAll(dir); err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(500+i*500) * time.Millisecond)
+	}
+	return err
 }
