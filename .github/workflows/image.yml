@@ -1,0 +1,171 @@
+name: image
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to the rolling image-latest release
+        required: false
+        type: boolean
+        default: true
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap qemu-user-static binfmt-support
+
+      - name: build rootfs
+        env:
+          BUILD_ID: ${{ github.sha }}
+        run: sudo -E bash ./scripts/image/build.sh ${{ matrix.arch }} build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: sign checksum
+        env:
+          SIGNING_KEY: ${{ secrets.DOCKUP_IMAGE_SIGNING_KEY }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::warning::DOCKUP_IMAGE_SIGNING_KEY is not set; artifact stays unsigned"
+            exit 0
+          fi
+          go run ./scripts/image/imgtool sign \
+            -key "$SIGNING_KEY" \
+            -in "build/dockup-$ARCH.tar.gz.sha256" \
+            -out "build/dockup-$ARCH.tar.gz.sig"
+          pub=$(go run ./scripts/image/imgtool pubkey -key "$SIGNING_KEY")
+          go run ./scripts/image/imgtool verify \
+            -pub "$pub" \
+            -in "build/dockup-$ARCH.tar.gz.sha256" \
+            -sig "build/dockup-$ARCH.tar.gz.sig"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.arch }}
+          path: build/dockup-${{ matrix.arch }}.tar.gz*
+          if-no-files-found: error
+          retention-days: 14
+
+  smoke:
+    name: wsl smoke (amd64)
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-amd64
+          path: build
+
+      - name: wsl version
+        run: wsl --version
+
+      - name: import image
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          wsl --import dockup-image C:\dockup-image "$PWD\build\dockup-amd64.tar.gz" --version 2
+          if ($LASTEXITCODE -ne 0) { throw "wsl --import failed" }
+
+      - name: image stamp
+        shell: pwsh
+        run: |
+          wsl -d dockup-image -u root -- cat /etc/dockup-image
+          if ($LASTEXITCODE -ne 0) { throw "missing /etc/dockup-image" }
+
+      - name: systemd is pid 1
+        shell: pwsh
+        run: |
+          $comm = ''
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            $comm = (wsl -d dockup-image -u root -- ps -p 1 -o comm= 2>$null) -join ''
+            if ($comm -match 'systemd') { $ok = $true; break }
+            Start-Sleep 2
+          }
+          if (-not $ok) { throw "systemd is not pid 1: [$comm]" }
+
+      - name: dockerd answers
+        shell: pwsh
+        run: |
+          $ok = $false
+          for ($i = 0; $i -lt 45; $i++) {
+            $v = wsl -d dockup-image -u root -- docker version --format '{{.Server.Version}}' 2>$null
+            if ($LASTEXITCODE -eq 0 -and $v) { $ok = $true; break }
+            Start-Sleep 2
+          }
+          if (-not $ok) { throw "dockerd did not answer" }
+
+      - name: hello-world
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          wsl -d dockup-image -u root -- docker run --rm hello-world
+          if ($LASTEXITCODE -ne 0) { throw "hello-world failed" }
+
+      - name: cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          wsl --terminate dockup-image 2>$null
+          wsl --unregister dockup-image 2>$null
+          exit 0
+
+  publish:
+    name: publish
+    needs: [build, smoke]
+    if: github.ref == 'refs/heads/main' && github.event.inputs.publish != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: list assets
+        run: ls -lh dist
+
+      - name: publish rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=image-latest
+          notes="Rolling prebuilt WSL images. Assets are replaced on every run."
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --notes "$notes"
+          else
+            gh release create "$tag" \
+              --target "${{ github.sha }}" \
+              --title "Dockup WSL image" \
+              --notes "$notes" \
+              --latest=false
+          fi
+          gh release upload "$tag" dist/* --clobber
