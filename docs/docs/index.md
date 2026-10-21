@@ -25,9 +25,14 @@ a named pipe (plus an optional `127.0.0.1` TCP bridge).
 ```powershell
 dockup setup                  # install the dockup distro (asks where + which arch)
 dockup daemon start           # run in the background
-docker -H npipe:////./pipe/dockup_engine run --rm hello-world
+dockup context use            # make Docker use dockup by default
+docker run --rm hello-world
 dockup daemon stop            # stop when done
 ```
+
+Prefer to leave your default Docker context alone? Use
+`docker -H npipe:////./pipe/dockup_engine ...` or the per-command
+`docker --context dockup ...`.
 
 Or run in the foreground with `dockup` (Ctrl+C stops it).
 
@@ -41,6 +46,7 @@ Or run in the foreground with `dockup` (Ctrl+C stops it).
 | `dockup prune [--all] [--volumes] [--keep-image]` | Reclaim in-distro space and delete the cached image |
 | `dockup restore [--full]` | Reset tampering (light) or reinstall from scratch (`--full`) |
 | `dockup ps` | `STATUS` (`running`/`starting...`/`stopped`) + `AUTOSTART` table |
+| `dockup context [use\|off]` | Show, activate, or deactivate the `dockup` Docker CLI context |
 | `dockup daemon start\|stop\|restart\|status\|log` | Background process management + log follow |
 | `dockup daemon autostart [on\|off]` | Show or set starting at Windows login (default off) |
 | `dockup shutdown` | Stop everything and terminate the distro |

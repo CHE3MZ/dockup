@@ -22,6 +22,7 @@ First run creates `~/.dockup/config.json`:
 | `pipe_name` | Named pipe to serve (default `\\.\pipe\dockup_engine`) |
 | `color` | Master switch for CLI colors (also auto-off when piped, `NO_COLOR`, `TERM=dumb`, or CI) |
 | `autostart` | Start at Windows login (managed via `dockup daemon autostart on\|off`) |
+| `docker_context_prev` | Context to restore on `dockup context off` (written by `dockup context use`; safe to remove) |
 
 !!! note
     Whether dockup is installed lives in `%APPDATA%\dockup\state.json`

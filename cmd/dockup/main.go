@@ -15,6 +15,7 @@ import (
 	"github.com/CHE3MZ/dockup/internal/autostart"
 	"github.com/CHE3MZ/dockup/internal/config"
 	"github.com/CHE3MZ/dockup/internal/daemon"
+	"github.com/CHE3MZ/dockup/internal/dockctx"
 	"github.com/CHE3MZ/dockup/internal/docker"
 	"github.com/CHE3MZ/dockup/internal/doctor"
 	"github.com/CHE3MZ/dockup/internal/image"
@@ -127,6 +128,8 @@ func run(args []string) int {
 			return 1
 		}
 		return cmdPs(cfg, jsonOut)
+	case "context":
+		return cmdContext(cfg, args[1:])
 	case "daemon":
 		return cmdDaemon(cfg, args[1:])
 	case "shutdown":
@@ -262,6 +265,7 @@ func usage() {
 		ui.LightBlue("Commands:") + "\n" +
 		helpCmd("setup", "Set up the dockup distro") +
 		helpCmd("ps", "Show status") +
+		helpCmd("context", "Manage the Docker CLI context") +
 		helpCmd("ssh [-- command]", "Open a shell inside the distro") +
 		helpCmd("version", "Show the version") +
 		helpCmd("help [command]", "Show help for a command") + "\n" +
@@ -288,6 +292,8 @@ func helpTopic(name string) int {
 		restoreHelp()
 	case "ps":
 		psHelp()
+	case "context":
+		contextHelp()
 	case "daemon":
 		daemonHelp()
 	case "shutdown":
@@ -457,6 +463,26 @@ func psHelp() {
   ` + ui.Bold("dockup ps") + ` [--json]
 
   ` + ui.Bold("--json, -j") + `   Machine-readable output for scripts.
+`)
+}
+
+func contextHelp() {
+	fmt.Print(ui.Header("dockup context") + `
+  dockup keeps a Docker CLI context named ` + ui.Cyan(`"dockup"`) + ` that points at
+  the bridge, so clients can select it without -H or DOCKER_HOST.
+
+  Setup creates the context. Activating it stays your choice.
+
+` + ui.LightBlue("Usage:") + `
+  ` + ui.Bold("dockup context") + `        Show the context, its host, and who is active
+  ` + ui.Bold("dockup context use") + `    Create/update it and make it the default
+  ` + ui.Bold("dockup context off") + `    Switch Docker back to the previous context
+
+  An active context applies unless ` + ui.Bold("DOCKER_HOST") + ` is set; the
+  environment variable always wins.
+
+  Pick it for one command with ` + ui.Bold("docker --context dockup ps") + `,
+  or remove it with ` + ui.Bold("docker context rm dockup") + `.
 `)
 }
 
@@ -834,6 +860,113 @@ func cmdPs(cfg userconfig.Config, jsonOut bool) int {
 			fmt.Printf("%s\n", ui.Gray(fmt.Sprintf("tcp %s down", cfg.TCPAddr())))
 		}
 	}
+	return 0
+}
+
+// cmdContext manages the Docker CLI context that points at the bridge.
+func cmdContext(cfg userconfig.Config, args []string) int {
+	if hasHelpFlag(args) {
+		contextHelp()
+		return 0
+	}
+	if len(args) > 1 {
+		logx.Err("too many arguments (try dockup context --help)")
+		return 1
+	}
+	if len(args) == 1 {
+		switch args[0] {
+		case "use":
+			return contextUse(cfg)
+		case "off":
+			return contextOff(cfg)
+		default:
+			logx.Err("unknown context command %q (try dockup context --help)", args[0])
+			return 1
+		}
+	}
+
+	info := dockctx.Get(cfg.EffectivePipe())
+	if !info.CLI {
+		logx.Err("docker CLI not found on PATH (install it from docker.com or with scoop)")
+		return 1
+	}
+	switch {
+	case info.Active:
+		logx.Ok("context %q is active", dockctx.Name)
+	case info.Created:
+		logx.Info("context %q exists, not active (current: %s)", dockctx.Name, info.Current)
+	default:
+		logx.Info("context %q is not created yet", dockctx.Name)
+	}
+	host := info.WantHost
+	if info.Created {
+		host = info.Host
+	}
+	ui.Printf("host: %s", host)
+	ui.Printf("current: %s", info.Current)
+	if info.Created && info.Host != info.WantHost {
+		logx.Warn("context host differs from config - run dockup context use to update it to %s", info.WantHost)
+	}
+	if !info.Active {
+		ui.Hint(`enable it with "dockup context use"`)
+	}
+	return 0
+}
+
+// contextUse activates the managed context, remembering the previous one so
+// "dockup context off" can restore it.
+func contextUse(cfg userconfig.Config) int {
+	info := dockctx.Get(cfg.EffectivePipe())
+	if !info.CLI {
+		logx.Err("docker CLI not found on PATH (install it from docker.com or with scoop)")
+		return 1
+	}
+	prev := ""
+	if info.Current != "" && info.Current != dockctx.Name {
+		prev = info.Current
+	}
+	if err := dockctx.Use(cfg.EffectivePipe()); err != nil {
+		logx.ErrFrom(err)
+		return 1
+	}
+	if prev != "" && prev != cfg.DockerContextPrev {
+		cfg.DockerContextPrev = prev
+		_ = userconfig.Save(cfg)
+	}
+	logx.Ok("docker now uses context %q", dockctx.Name)
+	if !relay.AliveOn(cfg.EffectivePipe()) {
+		ui.Hint(`dockup is not running yet - start it with "dockup daemon start" or "dockup"`)
+	}
+	if prev != "" {
+		ui.Hint(`switch back with "dockup context off"`)
+	}
+	return 0
+}
+
+// contextOff restores the context that was current before "dockup context use".
+func contextOff(cfg userconfig.Config) int {
+	info := dockctx.Get(cfg.EffectivePipe())
+	if !info.CLI {
+		logx.Err("docker CLI not found on PATH (install it from docker.com or with scoop)")
+		return 1
+	}
+	if !info.Active {
+		logx.Info("docker already uses context %q", info.Current)
+		return 0
+	}
+	target := strings.TrimSpace(cfg.DockerContextPrev)
+	if target == "" || target == dockctx.Name || !dockctx.Exists(target) {
+		target = "default"
+	}
+	if err := dockctx.UseContext(target); err != nil {
+		logx.ErrFrom(err)
+		return 1
+	}
+	if cfg.DockerContextPrev != "" {
+		cfg.DockerContextPrev = ""
+		_ = userconfig.Save(cfg)
+	}
+	logx.Ok("docker now uses context %q", target)
 	return 0
 }
 

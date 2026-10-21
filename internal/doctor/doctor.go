@@ -12,6 +12,7 @@ import (
 
 	"github.com/CHE3MZ/dockup/internal/autostart"
 	"github.com/CHE3MZ/dockup/internal/config"
+	"github.com/CHE3MZ/dockup/internal/dockctx"
 	"github.com/CHE3MZ/dockup/internal/docker"
 	"github.com/CHE3MZ/dockup/internal/logx"
 	"github.com/CHE3MZ/dockup/internal/relay"
@@ -243,6 +244,17 @@ func RunEx(fix bool) error {
 		}
 	} else {
 		logx.Info("info: pipe %s not held (dockup stopped)", pipe)
+	}
+	// Docker CLI context (created by setup; optional for -H users).
+	if info := dockctx.Get(pipe); info.CLI {
+		switch {
+		case info.Created && info.Host == info.WantHost:
+			ok("docker context " + dockctx.Name)
+		case info.Created:
+			logx.Info("info: docker context %q points at %s (run dockup context use to update it to %s)", dockctx.Name, info.Host, info.WantHost)
+		default:
+			logx.Info("info: docker context %q not created (run dockup context use)", dockctx.Name)
+		}
 	}
 	// TCP bridge?
 	if c, lerr := userconfig.Load(); lerr == nil && c.WithDefaults().UseTCP {

@@ -12,14 +12,26 @@ message telling you what is already holding the bridge.
 
 ## Your first containers
 
-Point any Docker client at the bridge. The per-command way:
+Setup creates a Docker CLI context named `dockup` that points at the
+bridge. Activate it once and every Docker client uses dockup:
 
 ```powershell
-docker -H npipe:////./pipe/dockup_engine version
+dockup context use
+docker version
+docker run --rm hello-world
+```
+
+`dockup context off` switches Docker back to the context that was active
+before. Prefer to leave your default alone? Pick the context per command,
+or point at the pipe:
+
+```powershell
+docker --context dockup run --rm hello-world
 docker -H npipe:////./pipe/dockup_engine run --rm hello-world
 ```
 
-The sticky way (current shell only):
+The sticky environment-variable way (current shell only; it overrides any
+context):
 
 ```powershell
 $env:DOCKER_HOST = 'npipe:////./pipe/dockup_engine'

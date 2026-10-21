@@ -9,6 +9,29 @@ default `docker_engine` pipe, so plain `docker ps` just works. (If Docker
 Desktop is running and holds that name, keep using `-H` / `DOCKER_HOST`
 below.)
 
+## Docker contexts
+
+Setup creates a Docker CLI context named `dockup` that points at the
+bridge. This is the cleanest way to select it, and it composes with
+Compose and IDE Docker integrations:
+
+```powershell
+dockup context use          # make dockup Docker's current context
+docker ps
+dockup context off          # restore the context used before
+```
+
+`dockup context` on its own shows the context's host and which context is
+active. For a single command, skip activation:
+
+```powershell
+docker --context dockup ps
+```
+
+An active context only applies when `DOCKER_HOST` is unset: the
+environment variable always wins. Uninstall removes the `dockup` context
+when it still points at the configured pipe.
+
 ## Connection strings
 
 | Bridge | Address |

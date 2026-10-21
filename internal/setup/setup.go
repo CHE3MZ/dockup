@@ -13,6 +13,7 @@ import (
 
 	"github.com/CHE3MZ/dockup/internal/autostart"
 	"github.com/CHE3MZ/dockup/internal/config"
+	"github.com/CHE3MZ/dockup/internal/dockctx"
 	"github.com/CHE3MZ/dockup/internal/docker"
 	"github.com/CHE3MZ/dockup/internal/download"
 	"github.com/CHE3MZ/dockup/internal/image"
@@ -370,6 +371,16 @@ func RunEx(o Options) int {
 	if imgUsed {
 		logx.Info("setup image kept at %s (removed by \"dockup prune\")", image.CacheDir(installDir))
 	}
+	// Best-effort convenience: a Docker context pointing at the bridge, so
+	// `docker --context dockup ...` works without -H. Activation is left to
+	// the user because changing their default daemon is not setup's call.
+	if dockctx.Available() {
+		if created, err := dockctx.Ensure(cfg.EffectivePipe()); err != nil {
+			logx.Warn("docker context: %v", err)
+		} else if created {
+			logx.Info("created docker context %q - run \"dockup context use\" to make it the default", dockctx.Name)
+		}
+	}
 	logx.Ok("you're all good to go! run \"dockup\" to start a foreground process or \"dockup daemon start\" to start a background daemon process.")
 	return 0
 }
@@ -443,11 +454,19 @@ func Uninstall(force bool) int {
 	// Keep default_path for the next setup; everything else goes away,
 	// including login autostart. Installed lives in state.json (cleared
 	// above), not here.
+	pipe := config.PipeName
 	if cfg, err := userconfig.Load(); err == nil {
 		cfg = cfg.WithDefaults()
+		pipe = cfg.EffectivePipe()
 		cfg.CurrentPath = ""
 		cfg.Autostart = false
+		cfg.DockerContextPrev = ""
 		_ = userconfig.Save(cfg)
+	}
+	// Only removes a context named "dockup" that still points at our pipe;
+	// a user-created context with that name is left untouched.
+	if err := dockctx.Remove(pipe); err != nil {
+		logx.Warn("could not remove docker context %q: %v", dockctx.Name, err)
 	}
 	_ = autostart.SetEnabled("", false)
 	if image.CacheExists(root) {

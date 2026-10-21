@@ -47,6 +47,9 @@ type Config struct {
 	PipeName    string `json:"pipe_name"`
 	Color       bool   `json:"color"`
 	Autostart   bool   `json:"autostart"`
+	// DockerContextPrev is the context Docker used before
+	// "dockup context use", restored by "dockup context off".
+	DockerContextPrev string `json:"docker_context_prev,omitempty"`
 }
 
 // Dir is ~/.dockup.

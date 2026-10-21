@@ -34,9 +34,18 @@ go install github.com/CHE3MZ/dockup/cmd/dockup@latest
 ```powershell
 dockup setup                  # one-time install, asks where to put things
 dockup daemon start           # run quietly in the background
-docker -H npipe:////./pipe/dockup_engine run --rm hello-world
+dockup context use            # make Docker use dockup by default
+docker run --rm hello-world
 dockup daemon stop            # stop when you're done
 ```
+
+Prefer not to change your default context? Use the pipe directly:
+
+```powershell
+docker -H npipe:////./pipe/dockup_engine run --rm hello-world
+```
+
+Or pick the context for a single command: `docker --context dockup ps`.
 
 Prefer the foreground? Run `dockup` and press Ctrl+C to stop. The bridge
 stops; the distro stays warm until `dockup shutdown`.
@@ -47,6 +56,7 @@ works too. The default pipe is mirrored automatically.
 ## Everyday commands
 
 - `dockup ps`: is it running?
+- `dockup context use`: make Docker use dockup (and `off` to switch back)
 - `dockup daemon autostart on`: start with Windows (off by default)
 - `dockup doctor`: something off? start here (`--fix` rebuilds the engine)
 - `dockup restore`: undo tampering, keeps your images
