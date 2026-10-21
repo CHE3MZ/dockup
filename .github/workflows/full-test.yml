@@ -576,6 +576,7 @@ jobs:
           if (!(Test-Path 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz')) { throw 'uninstall removed the image cache' }
           docker context inspect dockup 2>&1 | Out-Null
           if ($LASTEXITCODE -eq 0) { throw 'docker context left behind by uninstall' }
+          exit 0
       - name: second uninstall succeeds (idempotent, forced)
         run: |
           .\dockup.exe uninstall --force
