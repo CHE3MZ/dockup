@@ -234,6 +234,26 @@ jobs:
       - name: hello-world via pipe
         timeout-minutes: 5
         run: docker -H npipe:////./pipe/dockup_engine run --rm hello-world
+      - name: docker context points at the bridge
+        run: |
+          $h = docker context inspect dockup --format '{{.Endpoints.docker.Host}}'
+          if ($h -ne 'npipe:////./pipe/dockup_engine') { throw "context host = $h" }
+          .\dockup.exe context
+          if ($LASTEXITCODE -ne 0) { throw 'dockup context should succeed' }
+      - name: context use and off restore the previous context
+        timeout-minutes: 5
+        run: |
+          $before = docker context show
+          .\dockup.exe context use
+          if ($LASTEXITCODE -ne 0) { throw 'context use failed' }
+          $cur = docker context show
+          if ($cur -ne 'dockup') { throw "current context = $cur" }
+          docker run --rm hello-world
+          if ($LASTEXITCODE -ne 0) { throw 'docker via context failed' }
+          .\dockup.exe context off
+          if ($LASTEXITCODE -ne 0) { throw 'context off failed' }
+          $back = docker context show
+          if ($back -ne $before) { throw "restored $back, want $before" }
       - name: compose via pipe
         timeout-minutes: 5
         run: |
@@ -554,6 +574,8 @@ jobs:
           if ($c.default_path -ne 'C:/dockup-fulltest-wsl') { throw "default_path not retained: $($c.default_path)" }
           if (Test-Path 'C:\dockup-fulltest-wsl\distro\ext4.vhdx') { throw 'distro disk should be removed by uninstall' }
           if (!(Test-Path 'C:\dockup-fulltest-wsl\cache\images\dockup-amd64.tar.gz')) { throw 'uninstall removed the image cache' }
+          docker context inspect dockup 2>&1 | Out-Null
+          if ($LASTEXITCODE -eq 0) { throw 'docker context left behind by uninstall' }
       - name: second uninstall succeeds (idempotent, forced)
         run: |
           .\dockup.exe uninstall --force
