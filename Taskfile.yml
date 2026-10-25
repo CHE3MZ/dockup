@@ -34,6 +34,10 @@ tasks:
   check-links:
     cmds:
       - cmd: lychee .
+  ci:
+    desc: Run all jobs in .ci/jobs
+    cmds:
+      - sh .ci/utility/run-jobs.sh
   cliff:
     desc: Preview release notes for unreleased commits.
     silent: true
