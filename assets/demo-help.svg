@@ -1,0 +1,113 @@
+<svg height="545.6" width="742.72" xmlns="http://www.w3.org/2000/svg">
+<g transform="translate(32,16)">
+<filter filterUnits="userSpaceOnUse" height="553.6" id="shadow" width="750.72" x="-32" y="-24">
+<feGaussianBlur stdDeviation="12"/>
+</filter>
+<rect fill="#0000004d" filter="url(#shadow)" height="481.6" rx="4" ry="4" width="678.72" x="2" y="6"/>
+<rect fill="#242424" height="481.6" rx="4" ry="4" width="678.72"/>
+<clipPath id="header">
+<rect height="28" width="678.72"/>
+</clipPath>
+<rect clip-path="url(#header)" fill="#383837" height="56" rx="4" ry="4" width="678.72"/>
+<line stroke="#000000c0" stroke-width="0" x1="0" x2="678.72" y1="28" y2="28"/><text dominant-baseline="central" fill="#b3b3b3" font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" x="339.36" y="14">dockup</text>
+<g>
+<circle cx="14" cy="14" fill="#ff5f56" r="6" stroke="#ff5f56" stroke-width="0.5"/>
+<circle cx="34" cy="14" fill="#ffbd2e" r="6" stroke="#ffbd2e" stroke-width="0.5"/>
+<circle cx="54" cy="14" fill="#28c941" r="6" stroke="#28c941" stroke-width="0.5"/>
+</g>
+<svg class="terminal" font-family="Cascadia Mono, Cascadia Code, JetBrains Mono, Fira Code, Source Code Pro, Consolas, Menlo, Monaco, DejaVu Sans Mono, monospace, Symbols Nerd Font Mono, Eager Naturalist" font-size="14" height="453.6" width="678.72" y="28">
+<svg fill="#ffffff" x="11.2" y="8.4">
+<g>
+<svg height="436.8" viewBox="0 0 46.88 31.2" width="656.32">
+<g stroke-width="0.025"/>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="0">
+<text xml:space="preserve" y="0.947em"><tspan fill="#5dc5f8" font-weight="bold">dockup</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="33.6">
+<text xml:space="preserve" y="0.947em"><tspan fill="#5dc5f8">Usage:</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="50.4">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">dockup</tspan><tspan>              </tspan><tspan fill="#e6e6e6">Run </tspan><tspan fill="#e6e6e6">in </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">foreground </tspan><tspan fill="#e6e6e6">(Ctrl+C </tspan><tspan fill="#e6e6e6">to </tspan><tspan fill="#e6e6e6">stop)</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="67.2">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">dockup </tspan><tspan fill="#ffffff" font-weight="bold">&lt;command&gt;</tspan><tspan>    </tspan><tspan fill="#e6e6e6">Run </tspan><tspan fill="#e6e6e6">a </tspan><tspan fill="#e6e6e6">command</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="100.8">
+<text xml:space="preserve" y="0.947em"><tspan fill="#5dc5f8">Commands:</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="117.6">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">setup</tspan><tspan>               </tspan><tspan fill="#e6e6e6">Set </tspan><tspan fill="#e6e6e6">up </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">dockup </tspan><tspan fill="#e6e6e6">distro</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="134.4">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">ps</tspan><tspan>                  </tspan><tspan fill="#e6e6e6">Show </tspan><tspan fill="#e6e6e6">status</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="151.2">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">context</tspan><tspan>             </tspan><tspan fill="#e6e6e6">Manage </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">Docker </tspan><tspan fill="#e6e6e6">CLI </tspan><tspan fill="#e6e6e6">context</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="168">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">ssh </tspan><tspan fill="#ffffff" font-weight="bold">[-- </tspan><tspan fill="#ffffff" font-weight="bold">command]</tspan><tspan>    </tspan><tspan fill="#e6e6e6">Open </tspan><tspan fill="#e6e6e6">a </tspan><tspan fill="#e6e6e6">shell </tspan><tspan fill="#e6e6e6">inside </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">distro</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="184.8">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">version</tspan><tspan>             </tspan><tspan fill="#e6e6e6">Show </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">version</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="201.6">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">help </tspan><tspan fill="#ffffff" font-weight="bold">[command]</tspan><tspan>      </tspan><tspan fill="#e6e6e6">Show </tspan><tspan fill="#e6e6e6">help </tspan><tspan fill="#e6e6e6">for </tspan><tspan fill="#e6e6e6">a </tspan><tspan fill="#e6e6e6">command</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="235.2">
+<text xml:space="preserve" y="0.947em"><tspan fill="#5dc5f8">Daemon:</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="252">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">daemon</tspan><tspan>              </tspan><tspan fill="#e6e6e6">Start, </tspan><tspan fill="#e6e6e6">stop, </tspan><tspan fill="#e6e6e6">restart, </tspan><tspan fill="#e6e6e6">or </tspan><tspan fill="#e6e6e6">inspect </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">background </tspan><tspan fill="#e6e6e6">process</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="268.8">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">shutdown</tspan><tspan>            </tspan><tspan fill="#e6e6e6">Stop </tspan><tspan fill="#e6e6e6">everything</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="285.6">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">upgrade</tspan><tspan>             </tspan><tspan fill="#e6e6e6">Upgrade </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">engine </tspan><tspan fill="#e6e6e6">and </tspan><tspan fill="#e6e6e6">cached </tspan><tspan fill="#e6e6e6">setup </tspan><tspan fill="#e6e6e6">image</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="319.2">
+<text xml:space="preserve" y="0.947em"><tspan fill="#5dc5f8">Maintenance:</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="336">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">restore</tspan><tspan>             </tspan><tspan fill="#e6e6e6">Reset </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">distro </tspan><tspan fill="#e6e6e6">to </tspan><tspan fill="#e6e6e6">a </tspan><tspan fill="#e6e6e6">clean </tspan><tspan fill="#e6e6e6">state</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="352.8">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">prune</tspan><tspan>               </tspan><tspan fill="#e6e6e6">Reclaim </tspan><tspan fill="#e6e6e6">disk </tspan><tspan fill="#e6e6e6">space </tspan><tspan fill="#e6e6e6">and </tspan><tspan fill="#e6e6e6">cached </tspan><tspan fill="#e6e6e6">images</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="369.6">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">doctor</tspan><tspan>              </tspan><tspan fill="#e6e6e6">Check </tspan><tspan fill="#e6e6e6">health </tspan><tspan fill="#e6e6e6">and </tspan><tspan fill="#e6e6e6">repair </tspan><tspan fill="#e6e6e6">stale </tspan><tspan fill="#e6e6e6">state</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="386.4">
+<text xml:space="preserve" y="0.947em"><tspan>  </tspan><tspan fill="#ffffff" font-weight="bold">uninstall</tspan><tspan>           </tspan><tspan fill="#e6e6e6">Remove </tspan><tspan fill="#e6e6e6">the </tspan><tspan fill="#e6e6e6">distro </tspan><tspan fill="#e6e6e6">and </tspan><tspan fill="#e6e6e6">saved </tspan><tspan fill="#e6e6e6">state</tspan></text>
+</svg>
+<svg height="16.8" overflow="hidden" width="656.32" y="420">
+<text xml:space="preserve" y="0.947em"><tspan fill="#616161">Config </tspan><tspan fill="#616161">file: </tspan><tspan fill="#616161">~/.dockup/config.json</tspan></text>
+</svg>
+</g>
+</svg>
+</svg>
+<rect fill="none" height="481.6" rx="4" ry="4" stroke="#000000" stroke-width="0" width="678.72"/>
+<rect fill="none" height="480.6" rx="3.5" ry="3.5" stroke="#f0f0f080" stroke-width="0" width="677.72" x="0.5" y="0.5"/>
+</g>
+<style>
+@font-face {
+	font-family: Cascadia Mono;
+	font-weight: 200 700;
+	font-style: normal;
+	src: url(https://fonts.gstatic.com/s/cascadiamono/v5/TUZ2zw5pquJF3iuizJDZYqr1aZIn0E_o8WE.woff2) format('woff2');
+}
+@font-face {
+	font-family: Cascadia Mono;
+	font-weight: 200 700;
+	font-style: normal;
+	src: url(https://fonts.gstatic.com/s/cascadiamono/v5/TUZ2zw5pquJF3iuizJDZYqr1aZAn0E_o8WFBSA.woff2) format('woff2');
+}
+@font-face {
+	font-family: Cascadia Mono;
+	font-weight: 200 700;
+	font-style: normal;
+	src: url(https://fonts.gstatic.com/s/cascadiamono/v5/TUZ2zw5pquJF3iuizJDZYqr1aZcn0E_o8WFBSA.woff2) format('woff2');
+}
+</style>
+</svg>

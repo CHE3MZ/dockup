@@ -258,7 +258,7 @@ func helpCmd(command, description string) string {
 }
 
 func usage() {
-	fmt.Print(ui.Header("dockup") + ui.White(" - Docker Engine in a dedicated WSL distro.\n") + "\n" +
+	fmt.Print(ui.Header("dockup") + "\n" + "\n" +
 		ui.LightBlue("Usage:") + "\n" +
 		helpCmd("dockup", "Run in the foreground (Ctrl+C to stop)") +
 		helpCmd("dockup <command>", "Run a command") + "\n" +
@@ -278,8 +278,7 @@ func usage() {
 		helpCmd("prune", "Reclaim disk space and cached images") +
 		helpCmd("doctor", "Check health and repair stale state") +
 		helpCmd("uninstall", "Remove the distro and saved state") + "\n" +
-		ui.Gray("Config file: ~/.dockup/config.json") + "\n" +
-		ui.Gray("Docs:        ") + ui.Blue("https://che3mz.github.io/dockup/") + "\n")
+		ui.Gray("Config file: ~/.dockup/config.json") + "\n" )
 }
 
 func helpTopic(name string) int {

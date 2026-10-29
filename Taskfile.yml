@@ -52,6 +52,11 @@ tasks:
       RUST_LOG: off
     cmds:
       - git-cliff --latest --strip all --output RELEASE_NOTES.md
+  demo-help:
+    cmds:
+      - cmd: rm -rf dist
+      - task: build
+      - cmd: termframe --show-command false --title dockup --syntax-theme github-dark -o assets/demo-help.svg ./dist/dockup-windows-amd64.exe help
   scan:
     desc: Run other ops tools on the repo.
     cmds:
