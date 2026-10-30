@@ -1,0 +1,43 @@
+/* Header */
+:root {
+    --md-primary-fg-color: #394CBC;
+    --md-primary-fg-color--dark: #394CBC;
+    --md-primary-fg-color--light: #394CBC;
+}
+
+/* Dockup color scheme */
+[data-md-color-scheme="dockup"] {
+
+    /* Background */
+    --md-default-bg-color: #1c1d23;
+    --md-default-bg-color--light: #1c1d23;
+    --md-default-bg-color--lighter: #1c1d23;
+
+    /* Text */
+    --md-default-fg-color: #ffffff;
+    --md-default-fg-color--light: #eeeeee;
+    --md-typeset-color: #ffffff;
+
+    /* Headings */
+    --md-typeset-a-color: #ffffff;
+
+    /* Code blocks */
+    --md-code-bg-color: #2b2b31;
+    --md-code-fg-color: #ffffff;
+
+    /* Header text */
+    --md-primary-bg-color: #ffffff;
+    --md-primary-fg-color: #394CBC;
+}
+
+/* White headings */
+[data-md-color-scheme="terminull"] .md-typeset h1,
+[data-md-color-scheme="terminull"] .md-typeset h2,
+[data-md-color-scheme="terminull"] .md-typeset h3 {
+    color: #ffffff;
+}
+
+/* Table of contents */
+[data-md-color-scheme="terminull"] .md-nav--secondary .md-nav__title {
+    color: #ffffff;
+}
