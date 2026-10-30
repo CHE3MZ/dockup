@@ -16,4 +16,4 @@ dist/
 logs/
 
 # mkdocs (site)
-docs/site
+/site/

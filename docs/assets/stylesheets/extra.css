@@ -9,9 +9,9 @@
 [data-md-color-scheme="dockup"] {
 
     /* Background */
-    --md-default-bg-color: #27282d;
-    --md-default-bg-color--light: #27282d;
-    --md-default-bg-color--lighter: #27282d;
+    --md-default-bg-color: #1c1d23;
+    --md-default-bg-color--light: #1c1d23;
+    --md-default-bg-color--lighter: #1c1d23;
 
     /* Text */
     --md-default-fg-color: #ffffff;
@@ -22,7 +22,7 @@
     --md-typeset-a-color: #ffffff;
 
     /* Code blocks */
-    --md-code-bg-color: #222225;
+    --md-code-bg-color: #2b2b31;
     --md-code-fg-color: #ffffff;
 
     /* Header text */
