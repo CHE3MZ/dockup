@@ -27,7 +27,7 @@ jobs:
           
       - name: Install Dependencies
         run: |
-          pip install mkdocs ghp-import
+          pip install mkdocs-material ghp-import
           
       - name: Build and Deploy
         run: |
