@@ -1,0 +1,70 @@
+site_name: Dockup
+site_description: Docker Engine in a dedicated WSL distro, driven from Windows. No Docker Desktop.
+site_author: CHE3MZ
+site_url: https://che3mz.github.io/dockup/
+repo_url: https://github.com/CHE3MZ/dockup
+
+nav:
+  - Home: 
+    - Introduction: index.md
+    - See Also...: see-also.md
+  - Guides:
+    - Installation: guides/installation.md
+    - Getting Started: guides/getting-started.md
+    - Using Docker: guides/using-docker.md
+    - Configuration: guides/configuration.md
+    - Maintenance: guides/maintenance.md
+    - Troubleshooting: guides/troubleshooting.md
+  - Developers:
+    - Architecture: developers/architecture.md
+    - Prebuilt Image: developers/image.md
+    - Project Layout: developers/project-layout.md
+    - Building & Testing: developers/building-testing.md
+    - Releasing: developers/releasing.md
+  - Contributing: contributing.md
+
+theme:
+  name: "material"
+  language: en
+  logo: assets/icon-white.png
+  favicon: assets/icon-white.png
+  font:
+    text: Cal Sans
+    code: Cascadia Code
+  palette:
+    - media: "(prefers-color-scheme)"
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      primary: custom
+      accent: custom
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      primary: custom
+      accent: custom
+      scheme: dockup
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - footnotes
