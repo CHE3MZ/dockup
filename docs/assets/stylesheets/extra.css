@@ -31,13 +31,13 @@
 }
 
 /* White headings */
-[data-md-color-scheme="terminull"] .md-typeset h1,
-[data-md-color-scheme="terminull"] .md-typeset h2,
-[data-md-color-scheme="terminull"] .md-typeset h3 {
+[data-md-color-scheme="dockup"] .md-typeset h1,
+[data-md-color-scheme="dockup"] .md-typeset h2,
+[data-md-color-scheme="dockup"] .md-typeset h3 {
     color: #ffffff;
 }
 
 /* Table of contents */
-[data-md-color-scheme="terminull"] .md-nav--secondary .md-nav__title {
+[data-md-color-scheme="dockup"] .md-nav--secondary .md-nav__title {
     color: #ffffff;
 }

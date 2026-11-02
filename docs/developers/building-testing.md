@@ -92,6 +92,5 @@ This site: `docs/mkdocs.yml` + `docs/docs/` (theme vendored in `docs/theme`,
 so plain `pip install mkdocs` is enough). Build strictly before pushing:
 
 ```powershell
-cd docs
 mkdocs build --strict
 ```

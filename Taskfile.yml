@@ -30,7 +30,7 @@ tasks:
       - powershell -ExecutionPolicy Bypass -File ./scripts/smoke.ps1
   build-site:
     cmds:
-      - cd docs && mkdocs build
+      - mkdocs build
   check-links:
     cmds:
       - cmd: lychee .
