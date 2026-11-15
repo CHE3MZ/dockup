@@ -71,7 +71,7 @@ jobs:
             -in "build/dockup-$ARCH.tar.gz.sha256" \
             -sig "build/dockup-$ARCH.tar.gz.sig"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-${{ matrix.arch }}
           path: build/dockup-${{ matrix.arch }}.tar.gz*
